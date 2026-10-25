@@ -82,6 +82,36 @@
         </section>
       </section>
 
+      <!-- Екран локації (ілюстрація з місіями на дисках стежки) -->
+      <section class="view view-location" id="view-location" aria-labelledby="loc-title" hidden>
+        <header class="loc-bar">
+          <a class="btn btn-ghost btn-sm" id="loc-back" href="#map"></a>
+          <h1 id="loc-title"></h1>
+          <p class="loc-range" id="loc-range"></p>
+        </header>
+        <section class="card loc-card" aria-label="Ілюстрація локації">
+          <div class="loc-scroll" id="loc-scroll">
+            <div class="loc-stage" id="loc-stage">
+              <img id="loc-img" alt="" draggable="false">
+              <canvas class="loc-fx" id="loc-fx" aria-hidden="true"></canvas>
+              <div class="loc-nodes" id="loc-nodes"></div>
+            </div>
+          </div>
+          <div class="loc-zoom" role="group" aria-label="Масштаб">
+            <button type="button" data-loc-zoom="-1" aria-label="Віддалити">&minus;</button>
+            <button type="button" data-loc-zoom="1" aria-label="Наблизити">+</button>
+          </div>
+          <a class="btn btn-primary loc-enter" id="loc-enter" href="#"></a>
+        </section>
+        <div class="loc-info">
+          <section class="card loc-event" id="loc-event"></section>
+          <section class="card loc-missions" aria-labelledby="loc-missions-title">
+            <h2 id="loc-missions-title">Місії локації</h2>
+            <ol class="lv-list" id="loc-list"></ol>
+          </section>
+        </div>
+      </section>
+
       <!-- Проєкти -->
       <section class="view" id="view-projects" aria-labelledby="projects-title" hidden>
         <header class="topbar">
@@ -128,6 +158,7 @@
   <script src="js/art-web.js"></script>
   <script src="js/art-hub.js"></script>
   <script src="js/map3d.js"></script>
+  <script src="js/locations-art.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/handbook.js"></script>
   <script src="js/app.js"></script>

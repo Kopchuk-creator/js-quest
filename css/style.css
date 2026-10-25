@@ -404,6 +404,87 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .world-note { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-dim); margin-top: 4px; }
 .section-sub { font-size: 14px; font-weight: 600; color: var(--text-dim); }
 
+/* ---------- екран локації ---------- */
+
+.loc-bar { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; }
+.loc-bar h1 { font-size: clamp(26px, 3.2vw, 40px); font-weight: 800; letter-spacing: -0.02em; }
+.loc-range { color: var(--text-muted); padding-left: var(--s4); border-left: 1px solid var(--border-strong); font-variant-numeric: tabular-nums; }
+.loc-card { position: relative; overflow: hidden; padding: 0; container-type: inline-size; }
+.loc-scroll { overflow: hidden; border-radius: var(--r-lg); }
+.loc-scroll.is-zoomed { overflow: auto; max-height: 78vh; }
+.loc-stage { position: relative; width: 100%; overflow: hidden; }
+.loc-stage img { position: absolute; left: 0; width: 100%; height: auto; user-select: none; }
+.loc-fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.loc-nodes { position: absolute; inset: 0; }
+
+/* Кнопки місій лягають на кам'яні диски ілюстрації. */
+.loc-node {
+  position: absolute; transform: translate(-50%, -50%); width: clamp(26px, 4.6cqw, 66px); aspect-ratio: 1 / 1.3;
+  display: grid; place-items: center; border-radius: 50%; text-decoration: none; color: #fff;
+  border: 3px solid rgba(255, 255, 255, 0.55); background: rgba(14, 16, 24, 0.35); cursor: pointer; padding: 0;
+  aspect-ratio: 1.45 / 1; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s var(--ease), box-shadow 0.2s;
+}
+.loc-node:hover, .loc-node:focus-visible { transform: translate(-50%, -50%) scale(1.12); z-index: 3; }
+.loc-node:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
+.ln-num { font-weight: 800; font-size: clamp(11px, 1.5cqw, 20px); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85); }
+.loc-node.is-done { border-color: var(--mint); background: rgba(94, 224, 160, 0.3); box-shadow: 0 0 14px rgba(94, 224, 160, 0.55); }
+.loc-node.is-available { border-color: var(--yellow); background: rgba(247, 210, 58, 0.4); animation: nodePulse 1.6s ease-in-out infinite; }
+.loc-node.is-locked { border-color: rgba(255, 255, 255, 0.3); background: rgba(10, 12, 20, 0.55); color: rgba(255, 255, 255, 0.7); }
+@keyframes nodePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(247, 210, 58, 0.7), 0 0 18px rgba(247, 210, 58, 0.6); }
+  50% { box-shadow: 0 0 0 10px rgba(247, 210, 58, 0), 0 0 26px rgba(247, 210, 58, 0.9); }
+}
+.ln-badge { position: absolute; top: -6px; right: -6px; width: clamp(14px, 1.6cqw, 22px); height: clamp(14px, 1.6cqw, 22px); border-radius: 50%; display: grid; place-items: center; background: var(--mint); color: #0d2a1c; }
+.ln-badge .icon { width: 70%; height: 70%; stroke-width: 3.2; }
+.ln-badge.is-lock { background: #2a2b30; color: var(--text-muted); }
+.ln-here {
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); white-space: nowrap;
+  background: var(--yellow); color: var(--yellow-ink); font-size: 12px; font-weight: 800; padding: 2px 10px; border-radius: 6px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); animation: bob 1.4s steps(2) infinite;
+}
+.ln-tip {
+  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); white-space: nowrap; pointer-events: none;
+  background: rgba(17, 18, 19, 0.92); color: var(--text); font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 6px;
+  opacity: 0; transition: opacity 0.15s;
+}
+.loc-node:hover .ln-tip, .loc-node:focus-visible .ln-tip { opacity: 1; }
+.loc-trophy { border-color: rgba(247, 210, 58, 0.5); background: rgba(14, 16, 24, 0.55); cursor: default; }
+.loc-trophy canvas { width: 70%; height: auto; filter: grayscale(1) brightness(0.6); }
+.loc-trophy.is-owned { border-color: var(--yellow); box-shadow: 0 0 20px rgba(247, 210, 58, 0.8); }
+.loc-trophy.is-owned canvas { filter: none; }
+
+/* Справжні кнопки — точно поверх намальованих на ілюстрації. */
+.loc-zoom {
+  position: absolute; left: 1.9cqw; bottom: 3.6cqw; display: flex; height: 4.2cqw; min-height: 34px;
+  background: #1c1e23; border: 1px solid #3a3d44; border-radius: 1cqw; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.loc-zoom button { width: 4.4cqw; min-width: 36px; border: 0; background: none; color: #fff; font-size: clamp(16px, 2cqw, 26px); font-weight: 700; cursor: pointer; }
+.loc-zoom button + button { border-left: 1px solid #3a3d44; }
+.loc-zoom button:hover { background: #2a2c32; }
+.loc-enter {
+  position: absolute; right: 1.9cqw; bottom: 3.2cqw; min-height: 36px; height: 4.4cqw; min-width: 120px; width: 13cqw;
+  font-size: clamp(14px, 1.5cqw, 20px); border-radius: 0.9cqw; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+.loc-enter.is-disabled { background: #3a3d44; color: var(--text-muted); cursor: not-allowed; }
+.loc-info { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: var(--s4); }
+.loc-event { padding: var(--s5); display: flex; flex-direction: column; gap: var(--s2); }
+.loc-event h2 { font-size: 20px; font-weight: 800; }
+.loc-event h2 .icon { color: var(--mint); }
+.loc-event p:not(.eyebrow) { color: var(--text-muted); font-size: 14px; }
+.loc-missions { padding: var(--s4); }
+.loc-missions h2 { font-size: 18px; font-weight: 800; margin-bottom: var(--s2); }
+
+@media (max-width: 760px) {
+  .loc-info { grid-template-columns: minmax(0, 1fr); }
+  .loc-range { border-left: 0; padding-left: 0; }
+  .ln-here { font-size: 10px; padding: 1px 6px; }
+  .loc-enter { width: auto; min-width: 0; min-height: 30px; padding: 4px 10px; font-size: 13px; }
+  .loc-enter .icon { width: 14px; height: 14px; }
+  .loc-zoom { min-height: 28px; }
+  .loc-zoom button { min-width: 28px; font-size: 16px; }
+}
+
 /* ---------- довідник ---------- */
 
 .handbook { padding: var(--s5); }

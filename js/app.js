@@ -408,6 +408,146 @@
   }
 
   /* =========================================================
+     Екран локації: велика ілюстрація, місії на дисках стежки
+     ========================================================= */
+
+  const locArt = (window.LOCATION_ART || {})[Game.WORLD_ID] || {};
+  let locZoom = 1;
+  let locFxTimer = 0;
+
+  // Колір «живих» частинок над ілюстрацією кожної локації.
+  const LOC_MOTES = ["#ffd86b", "#ff9a4a", "#c8ff7a", "#7fe3ff", "#ffe9a8", "#b6ff8a", "#ffffff", "#ffcf4a", "#ffffff", "#fff2a8", "#ffd86b"];
+
+  function hasLocationArt(id) {
+    return !!locArt[id];
+  }
+
+  function renderLocation(id) {
+    const loc = LOCATIONS.find((l) => l.id === id);
+    const art = locArt[id];
+    if (!loc || !art) {
+      location.hash = "#map";
+      return;
+    }
+    const status = Game.locationStatus(progress, loc);
+    const lp = Game.locationProgress(progress, loc);
+    const first = loc.levels[0], last = loc.levels[loc.levels.length - 1];
+
+    $("#loc-back").innerHTML = UI.icon("arrowLeft") + "Карта світу";
+    $("#loc-back").setAttribute("href", "#map");
+    $("#loc-title").textContent = loc.name;
+    $("#loc-range").textContent = first + "–" + last + " · " + loc.levels.length + " " + plural(loc.levels.length, "рівень", "рівні", "рівнів") + " · пройдено " + lp.done;
+
+    // Ілюстрація без вбудованої верхньої смуги: контейнер має пропорції «видимої» частини.
+    const visibleH = art.h - art.crop;
+    const stage = $("#loc-stage");
+    stage.style.aspectRatio = art.w + " / " + visibleH;
+    const img = $("#loc-img");
+    img.style.top = (-art.crop / visibleH) * 100 + "%";
+    img.alt = "Ілюстрація локації «" + loc.name + "»";
+    if (img.getAttribute("src") !== art.src) img.src = art.src;
+    $("#loc-scroll").parentElement.style.setProperty("--loc-ratio", art.w / visibleH);
+
+    const pos = ([x, y]) => 'left:' + (x / art.w) * 100 + "%;top:" + ((y - art.crop) / visibleH) * 100 + "%";
+    const nodes = loc.levels.map((levelId, i) => {
+      const level = Game.getLevel(levelId);
+      const st = Game.levelStatus(progress, levelId);
+      const point = art.nodes[i] || art.nodes[art.nodes.length - 1];
+      const label = "Місія " + (i + 1) + ": " + level.title + " — " + (st === "done" ? "пройдено" : st === "available" ? "доступна" : "закрита");
+      const inner = '<span class="ln-num">' + (i + 1) + "</span>" +
+        (st === "done" ? '<span class="ln-badge">' + UI.icon("check") + "</span>" : st === "locked" ? '<span class="ln-badge is-lock">' + UI.icon("lock") + "</span>" : "") +
+        '<span class="ln-tip">' + UI.esc(level.title) + "</span>" +
+        (st === "available" ? '<span class="ln-here">Ти тут</span>' : "");
+      return st === "locked"
+        ? '<button type="button" class="loc-node is-locked" style="' + pos(point) + '" aria-label="' + UI.esc(label) + '" data-locked>' + inner + "</button>"
+        : '<a class="loc-node is-' + st + '" style="' + pos(point) + '" href="' + levelUrl(levelId) + '" aria-label="' + UI.esc(label) + '">' + inner + "</a>";
+    });
+    if (art.trophy) {
+      const owned = status === "done";
+      nodes.push('<span class="loc-node loc-trophy' + (owned ? " is-owned" : "") + '" style="' + pos(art.trophy) + '" title="' + UI.esc((owned ? "" : "Трофей: ") + loc.trophy.name) + '" data-item="' + loc.trophy.icon + '"></span>');
+    }
+    $("#loc-nodes").innerHTML = nodes.join("");
+    const trophyEl = document.querySelector("#loc-nodes .loc-trophy");
+    if (trophyEl) Art.mount(trophyEl, Art.item(loc.trophy.icon), loc.trophy.name);
+
+    // Кнопка «Увійти» веде на поточну місію локації.
+    const enter = $("#loc-enter");
+    const currentId = loc.levels.find((lid) => Game.levelStatus(progress, lid) === "available");
+    if (status === "locked") {
+      enter.innerHTML = UI.icon("lock") + "Закрито";
+      enter.setAttribute("href", "#map");
+      enter.classList.add("is-disabled");
+      enter.setAttribute("aria-disabled", "true");
+    } else {
+      enter.classList.remove("is-disabled");
+      enter.removeAttribute("aria-disabled");
+      enter.innerHTML = UI.icon("play") + (status === "done" ? "Повторити" : lp.done ? "Продовжити" : "Увійти");
+      enter.setAttribute("href", levelUrl(currentId || first));
+    }
+
+    $("#loc-event").innerHTML =
+      '<p class="eyebrow">' + (status === "done" ? "Світова подія відбулась" : status === "current" ? "Відбудова триває" : "Ще за туманом") + "</p>" +
+      "<h2>" + (status === "done" ? UI.icon("check") + " " : "") + UI.esc(loc.event) + "</h2>" +
+      '<div class="xp-bar" role="progressbar" aria-label="Пройдено місій локації" aria-valuemin="0" aria-valuemax="' + lp.total + '" aria-valuenow="' + lp.done + '"><span style="width:' + Math.round(lp.ratio * 100) + '%"></span></div>' +
+      "<p>" + lp.done + " з " + lp.total + " місій · трофей: «" + UI.esc(loc.trophy.name) + "»</p>";
+    $("#loc-list").innerHTML = loc.levels.map((lid, i) => levelRow(lid, i + 1)).join("");
+
+    locZoom = 1;
+    applyLocZoom();
+    startLocFx(LOC_MOTES[(id - 1) % LOC_MOTES.length]);
+    document.title = "JS Quest — " + loc.name;
+  }
+
+  function plural(n, one, few, many) {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  }
+
+  function applyLocZoom() {
+    $("#loc-stage").style.width = locZoom * 100 + "%";
+    $("#loc-scroll").classList.toggle("is-zoomed", locZoom > 1);
+  }
+
+  // Живий шар над ілюстрацією: світлячки/іскри повільно здіймаються й мерехтять.
+  function startLocFx(color) {
+    cancelAnimationFrame(locFxTimer);
+    const canvas = $("#loc-fx");
+    const ctx = canvas.getContext("2d");
+    const motes = Array.from({ length: 34 }, (_, i) => ({ x: Math.random(), y: Math.random(), s: 0.6 + Math.random() * 1.4, v: 0.008 + Math.random() * 0.02, p: Math.random() * 6.28, i }));
+    let last = performance.now();
+    function frame(now) {
+      locFxTimer = requestAnimationFrame(frame);
+      if (now - last < 40) return;
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+      ctx.clearRect(0, 0, w, h);
+      if (UI.motion() === "off") return;
+      motes.forEach((m) => {
+        m.y -= m.v * dt * 3;
+        m.p += dt * 2;
+        if (m.y < -0.02) { m.y = 1.02; m.x = Math.random(); }
+        const glow = 0.35 + 0.65 * Math.abs(Math.sin(m.p));
+        const r = m.s * Math.max(1.2, w / 700);
+        ctx.globalAlpha = glow * 0.85;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc((m.x + Math.sin(m.p * 0.7) * 0.01) * w, m.y * h, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = glow * 0.18;
+        ctx.beginPath();
+        ctx.arc((m.x + Math.sin(m.p * 0.7) * 0.01) * w, m.y * h, r * 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+    locFxTimer = requestAnimationFrame(frame);
+  }
+
+  /* =========================================================
      Проєкти й журнал локацій світу
      ========================================================= */
 
@@ -525,11 +665,18 @@
 
   /* ---------- розділи ---------- */
 
-  const VIEWS = ["hub", "map", "projects", "handbook", "trophies"];
-  const TITLES = { hub: "світи", map: "карта світу", projects: "проєкти", handbook: "довідник", trophies: "трофеї" };
+  const VIEWS = ["hub", "map", "location", "projects", "handbook", "trophies"];
+  const TITLES = { hub: "світи", map: "карта світу", location: "локація", projects: "проєкти", handbook: "довідник", trophies: "трофеї" };
+
+  // #loc-3 — екран локації з ілюстрацією (якщо вона є для цього світу).
+  function hashLocation() {
+    const m = location.hash.match(/^#loc-(\d+)$/);
+    return m && hasLocationArt(Number(m[1])) ? Number(m[1]) : null;
+  }
 
   function currentView() {
     const name = location.hash.slice(1);
+    if (hashLocation()) return "location";
     if (VIEWS.includes(name)) return name;
     // Без хешу: якщо в URL обрано світ — його карта, інакше світ-хаб.
     return Game.hasWorldParam ? "map" : "hub";
@@ -539,13 +686,15 @@
     const view = currentView();
     VIEWS.forEach((v) => { document.getElementById("view-" + v).hidden = v !== view; });
     if (map3d && view !== "map") map3d.stop();
-    UI.setActiveNav($("#sidebar"), view);
+    if (view !== "location") cancelAnimationFrame(locFxTimer);
+    UI.setActiveNav($("#sidebar"), view === "location" ? "map" : view);
+    if (view === "location") renderLocation(hashLocation());
     if (view === "hub") renderHub();
     if (view === "projects") renderProjects();
     if (view === "handbook") Handbook.render($("#handbook"), { root: "", world: Game.WORLD_ID });
     if (view === "trophies") renderProfile();
     if (view === "map") renderMap();
-    document.title = "JS Quest — " + TITLES[view];
+    if (view !== "location") document.title = "JS Quest — " + TITLES[view];
   }
 
   function renderAll() {
@@ -570,7 +719,29 @@
 
   $("#map-labels").addEventListener("click", (event) => {
     const btn = event.target.closest(".loc-label");
-    if (btn) selectLocation(Number(btn.dataset.loc));
+    if (!btn) return;
+    const id = Number(btn.dataset.loc);
+    // Є ілюстрація локації — відкриваємо її екран; інакше — панель зі списком місій.
+    if (hasLocationArt(id)) location.hash = "#loc-" + id;
+    else selectLocation(id);
+  });
+
+  $("#view-location").addEventListener("click", (event) => {
+    const zoomBtn = event.target.closest("[data-loc-zoom]");
+    if (zoomBtn) {
+      locZoom = Math.max(1, Math.min(2.5, locZoom + Number(zoomBtn.dataset.locZoom) * 0.5));
+      applyLocZoom();
+      return;
+    }
+    if (event.target.closest("[data-locked]")) {
+      UI.toast(UI.icon("lock") + " <span>Ця місія відкриється, щойно пройдеш попередню.</span>");
+      return;
+    }
+    const enter = event.target.closest("#loc-enter.is-disabled");
+    if (enter) {
+      event.preventDefault();
+      UI.toast(UI.icon("lock") + " <span>Локація ще за туманом — пройди попередню.</span>");
+    }
   });
 
   $("#hub-labels").addEventListener("click", (event) => {

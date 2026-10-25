@@ -103,6 +103,12 @@
     return [{ key: "filled", label: "Пропуск заповнено" }, { key: "correct", label: "Код працює як треба" }];
   }
 
+  // Якщо в локації є ілюстрований екран — повертаємось на нього, інакше на карту світу.
+  function locationUrl() {
+    const art = (window.LOCATION_ART || {})[Game.WORLD_ID];
+    return art && art[loc.id] ? "../index.html?world=" + Game.WORLD_ID + "#loc-" + loc.id : Game.mapUrl("../");
+  }
+
   function fileName() {
     if (level.fileName) return level.fileName;
     if (level.functionName) return level.functionName + ".js";
@@ -196,7 +202,7 @@
       '<div class="mission">' +
       '<header class="m-head">' +
       '<nav class="crumbs" aria-label="Хлібні крихти"><a href="../index.html#hub">' + UI.icon("portal") + UI.esc(Game.meta.tech) + "</a>" + UI.icon("chevronRight") +
-      '<a href="' + Game.mapUrl("../") + '">' + UI.icon("map") + UI.esc(loc.name) + "</a>" + UI.icon("chevronRight") +
+      '<a href="' + locationUrl() + '">' + UI.icon("map") + UI.esc(loc.name) + "</a>" + UI.icon("chevronRight") +
       '<span aria-current="page">' + UI.esc(level.title) + "</span></nav>" +
       "<h1>" + UI.esc(level.title) + "</h1>" +
       '<div class="m-progress"><span>Місія ' + (indexInLoc + 1) + " з " + loc.levels.length + "</span>" + dotsHtml() +
