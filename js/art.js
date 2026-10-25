@@ -1027,11 +1027,82 @@
     }
   }
 
+  /* ---------- 3D (воксельний) рельєф JS-світу ----------
+     Та сама географія, що й на плоскій карті: море праворуч, річка,
+     болото, поле, гори зі снігом на півночі, густий ліс посередині. */
+
+  const JS_CELL = 6.25;
+
+  // Гори — окремі вершини різної висоти вздовж півночі (сніг лише на верхівках).
+  const JS_PEAKS = [];
+  for (let k = 0; k < 11; k++) {
+    JS_PEAKS.push([4 + k * 21 + hash(k, 1, 21) * 10, 10 + hash(k, 2, 21) * 22, 7 + hash(k, 3, 21) * 6]);
+  }
+  for (let k = 0; k < 5; k++) {
+    JS_PEAKS.push([262 + k * 22 + hash(k, 4, 21) * 8, 4 + hash(k, 5, 21) * 8, 5 + hash(k, 6, 21) * 4]);
+  }
+
+  function jsMountain(x, y) {
+    let best = 0;
+    JS_PEAKS.forEach(([px, py, ph]) => {
+      best = Math.max(best, ph - Math.hypot(x - px, (y - py) * 1.3) / 5.5);
+    });
+    return best;
+  }
+
+  function jsVoxelTile(i, j) {
+    const x = i * JS_CELL + JS_CELL / 2, y = j * JS_CELL + JS_CELL / 2;
+    const n = fbm(x / 38, y / 38, 1);
+    const sea = x - seaEdge(y);
+    if (sea > 7) return { type: "deep", h: 0 };
+    if (sea > 0) return { type: "water", h: 0 };
+    if (sea > -5) return { type: "sand", h: 1 };
+    const river = distToPolyline(x, y, RIVER) - (5 + n * 2);
+    if (river < 0) return { type: "water", h: 1 };
+    if (Math.hypot(x - 188, (y - 150) * 1.4) - (24 + n * 8) < 0) return { type: "swamp", h: 1 };
+    if (Math.hypot(x - 28, (y - 92) * 1.6) - (20 + n * 8) < 0) return { type: "field", h: 2 };
+    const m = jsMountain(x, y) + (n - 0.5) * 1.5;
+    if (m > 3.2) {
+      const h = Math.round(m);
+      return { type: h >= 9 ? "snow" : "rock", h };
+    }
+    const forest = Math.hypot(x - 126, y - 175) < 55;
+    return { type: forest ? "forest" : "grass", h: 2 + (n > 0.55 ? 1 : 0) + (n > 0.68 ? 1 : 0) };
+  }
+
+  function jsVoxelTrees() {
+    const trees = [];
+    for (let i = 0; i < 900; i++) {
+      const x = Math.floor(hash(i, 1, 31) * MAP_W);
+      const y = Math.floor(hash(i, 2, 37) * MAP_H);
+      const density = fbm(x / 30, y / 30, 4) + (Math.hypot(x - 126, y - 175) < 55 ? 0.25 : 0) + (x < 40 ? 0.15 : 0);
+      if (density < 0.58) continue;
+      if (x - seaEdge(y) > -6 || distToPolyline(x, y, RIVER) < 7 || jsMountain(x, y) > 2.6) continue;
+      if (Math.hypot(x - 188, (y - 150) * 1.4) < 30 || Math.hypot(x - 28, (y - 92) * 1.6) < 24) continue;
+      trees.push([x, y, hash(i, 3, 5) > 0.5 ? PINE : PINE_LIGHT]);
+    }
+    return trees;
+  }
+
   registerWorld("js", {
     mapW: MAP_W,
     mapH: MAP_H,
     points: MAP_POINTS,
     buildTerrain,
+    voxel: {
+      cols: MAP_W / JS_CELL,
+      rows: MAP_H / JS_CELL,
+      cell: JS_CELL,
+      tile: jsVoxelTile,
+      trees: jsVoxelTrees(),
+      sky: ["#6fb6e0", "#c4e8f8"],
+      // «Вершина вежі» в 3D — нагорі самої вежі.
+      points: { 10: [318, 164] },
+      lift: { 10: 64 },
+      labelPos: { 10: { dx: -14, dy: -10, align: "right" } },
+      // Живі ефекти локацій.
+      fx: { 1: "smoke", 2: "sparkle", 3: "leaves", 4: "sparkle", 5: "beam", 6: "bubbles", 7: "sparkle", 8: "gold", 9: "smoke", 10: "storm", 11: "fireworks" },
+    },
     landmarks: LANDMARKS,
     biomes: BIOMES,
     // Хмара «Вершини» висить вище, щоб не накривати героя на даху вежі.

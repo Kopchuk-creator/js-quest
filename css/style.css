@@ -204,6 +204,20 @@ code, pre, textarea, kbd, .text-input { font-variant-ligatures: none; font-featu
 .trail.is-locked { stroke: rgba(230, 232, 236, 0.55); stroke-width: 2.5; }
 @keyframes march { to { stroke-dashoffset: -20; } }
 
+/* Компактні підписи 3D-карти: значки замість назв. */
+.map-stage.is-compact .loc-label:not(.is-current):not(:hover):not(:focus-visible):not(.is-selected) .loc-text { display: none; }
+.map-stage.is-compact .loc-label.is-locked:not(:hover):not(:focus-visible):not(.is-selected) .loc-name { display: none; }
+.map-stage.is-compact .loc-label.is-done:not(:hover):not(:focus-visible):not(.is-selected) .loc-name { padding: 3px; border-radius: 50%; }
+.map-stage.is-compact .loc-label:hover, .map-stage.is-compact .loc-label:focus-visible, .map-stage.is-compact .loc-label.is-selected { z-index: 2; }
+.map-stage.is-compact .loc-lock { width: 22px; height: 22px; }
+.map-tools { position: absolute; top: var(--s3); right: var(--s3); z-index: 4; display: flex; gap: 6px; }
+.map-tools[hidden] { display: none; }
+.map-tools .icon-btn { width: 36px; height: 36px; font-size: 18px; font-weight: 700; background: rgba(17, 18, 19, 0.82); color: var(--text); }
+.map-tools .icon-btn:hover { border-color: var(--yellow); }
+.map-scroll.is-zoomed { overflow: auto; max-height: 72vh; cursor: grab; }
+.map-scroll.is-dragging { cursor: grabbing; user-select: none; }
+.map-stage { flex: none; }
+.map-hero[hidden] { display: none; }
 .map-hero { position: absolute; width: 4.6%; pointer-events: none; z-index: 2; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.35)); }
 .map-hero canvas { width: 100%; height: auto; animation: bob 1.4s steps(2) infinite; }
 .map-hero::after {
@@ -728,6 +742,11 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
   .main { padding-left: var(--s3); padding-right: var(--s3); }
 }
 
+/* «Зменшити рух»: прибираємо в'їзди панелей і переходи; спокійне життя світу лишається. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  .location-panel, .drawer[open], .toast, .result.is-success, .xp-chip.is-earned { animation: none !important; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; }
+  .trail.is-next { animation-duration: 3s; }
 }
+/* Гравець поставив анімацію на паузу кнопкою на карті. */
+.motion-off *, .motion-off *::before, .motion-off *::after { animation-play-state: paused !important; }

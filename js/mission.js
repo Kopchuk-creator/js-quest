@@ -585,9 +585,9 @@
     }
   });
 
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  {
     setInterval(() => {
-      if (state.sparkle !== null) return;
+      if (state.sparkle !== null || UI.motion() === "off") return;
       state.frame++;
       drawScene();
     }, 450);

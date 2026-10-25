@@ -121,13 +121,38 @@
     return "M" + p1.join(" ") + " C" + c1.join(" ") + " " + c2.join(" ") + " " + p2.join(" ");
   }
 
+  // Світи з воксельним описом показуються як 3D-карта; інші — як пласка.
+  const use3D = !!(worldArt.voxel && window.Map3D);
+  let map3d = null;
+  let zoom = 1;
+
+  // Геометрія карти: розмір полотна й екранні точки локацій.
+  function geom() {
+    if (use3D) {
+      const [w, h] = map3d.size();
+      return {
+        w, h,
+        point: (id) => { const [px, py] = map3d.locPercent(id); return [(px * w) / 100, (py * h) / 100]; },
+        labelPos: worldArt.voxel.labelPos || {},
+        trail: map3d.trail(),
+      };
+    }
+    return {
+      w: worldArt.mapW, h: worldArt.mapH,
+      point: (id) => worldArt.points[id],
+      labelPos: worldArt.labelPos,
+      trail: LOCATIONS.map((loc) => {
+        const [x, y] = worldArt.points[loc.id];
+        const dy = worldArt.pathDy[loc.id];
+        return [x, y + (dy !== undefined ? dy : 1)];
+      }),
+    };
+  }
+
   function renderPath(states) {
     // Стежка проходить трохи нижче опорних точок — по землі перед орієнтирами.
-    const points = LOCATIONS.map((loc) => {
-      const [x, y] = worldArt.points[loc.id];
-      const dy = worldArt.pathDy[loc.id];
-      return [x, y + (dy !== undefined ? dy : 1)];
-    });
+    const G = geom();
+    const points = G.trail;
     let html = "";
     for (let i = 0; i < points.length - 1; i++) {
       const from = states[LOCATIONS[i].id].status;
@@ -136,17 +161,18 @@
       html += '<path class="trail ' + cls + '" d="' + segmentPath(points, i) + '"/>';
     }
     const svg = $("#map-path");
-    svg.setAttribute("viewBox", "0 0 " + worldArt.mapW + " " + worldArt.mapH);
+    svg.setAttribute("viewBox", "0 0 " + G.w + " " + G.h);
     svg.innerHTML = html;
   }
 
   function renderLabels(states) {
+    const G = geom();
     const html = LOCATIONS.map((loc) => {
       const st = states[loc.id];
-      const [x, y] = worldArt.points[loc.id];
-      const pos = Object.assign({ dx: 0, dy: 6 }, worldArt.labelPos[loc.id]);
-      const left = ((x + pos.dx) / worldArt.mapW) * 100;
-      const top = ((y + pos.dy) / worldArt.mapH) * 100;
+      const [x, y] = G.point(loc.id);
+      const pos = Object.assign({ dx: 0, dy: 6 }, G.labelPos[loc.id]);
+      const left = ((x + pos.dx) / G.w) * 100;
+      const top = ((y + pos.dy) / G.h) * 100;
       const lp = Game.locationProgress(progress, loc);
       const statusText = st.status === "done" ? "відновлено" : st.status === "current" ? "ти тут, пройдено " + lp.done + " з " + lp.total : "заблоковано";
       const iconHtml = st.status === "done" ? '<span class="loc-icon is-done">' + UI.icon("check") + "</span>"
@@ -157,7 +183,7 @@
         (selectedLocation === loc.id ? " is-selected" : "") + '" style="left:' + left + "%;top:" + top + '%" data-loc="' + loc.id +
         '" aria-label="' + UI.esc(loc.name + ": " + statusText) + '">' +
         (st.status === "locked" ? '<span class="loc-lock">' + UI.icon("lock") + "</span>" : "") +
-        '<span class="loc-name">' + iconHtml + UI.esc(loc.name) + "</span>" +
+        '<span class="loc-name">' + iconHtml + '<span class="loc-text">' + UI.esc(loc.name) + "</span></span>" +
         (st.status === "current" ? '<span class="loc-here">Ти тут</span>' : "") +
         "</button>"
       );
@@ -179,25 +205,110 @@
 
   function drawMap() {
     const states = locStates();
+    if (use3D) return states; // 3D-карта анімує себе сама (requestAnimationFrame)
     Art.renderMap($("#map-canvas"), states, frame, Game.WORLD_ID);
     return states;
   }
 
   function renderMap() {
-    $("#map-stage").style.aspectRatio = worldArt.mapW + " / " + worldArt.mapH;
     $("#map-title").textContent = Game.meta.name;
     $("#map-subtitle").innerHTML = UI.esc(Game.meta.tech) + ". Виконуй місії.<br>Відновлюй цей світ.";
-    $("#map-canvas").setAttribute("aria-label", "Піксельна карта світу «" + Game.meta.name + "»");
+    $("#map-canvas").setAttribute("aria-label", (use3D ? "Тривимірна" : "Піксельна") + " карта світу «" + Game.meta.name + "»");
     const states = drawMap();
+    let current;
+    if (use3D) {
+      if (!map3d) map3d = Map3D.create({ canvas: $("#map-canvas"), worldId: Game.WORLD_ID });
+      current = LOCATIONS.find((loc) => states[loc.id].status === "current") || LOCATIONS[LOCATIONS.length - 1];
+      map3d.update(states, Game.currentLevelId(progress) ? current.id : null);
+      map3d.start();
+      $("#map-hero").hidden = true;
+      $("#map-tools").hidden = false;
+    } else {
+      current = placeHero(states);
+      $("#map-tools").hidden = true;
+    }
+    const G = geom();
+    $("#map-stage").style.aspectRatio = G.w + " / " + G.h;
+    applyZoom();
     renderPath(states);
     renderLabels(states);
-    const current = placeHero(states);
-    // На вузьких екранах карта прокручується — показуємо поточну локацію.
+    // Якщо карта ширша за екран — показуємо поточну локацію.
+    scrollToPoint(G.point(current.id), G);
+  }
+
+  function scrollToPoint(point, G) {
     const scroller = $("#map-scroll");
     if (scroller.scrollWidth > scroller.clientWidth) {
-      const [x] = worldArt.points[current.id];
-      scroller.scrollLeft = (x / worldArt.mapW) * scroller.scrollWidth - scroller.clientWidth / 2;
+      scroller.scrollLeft = (point[0] / G.w) * scroller.scrollWidth - scroller.clientWidth / 2;
     }
+    if (scroller.scrollHeight > scroller.clientHeight) {
+      scroller.scrollTop = (point[1] / G.h) * scroller.scrollHeight - scroller.clientHeight / 2;
+    }
+  }
+
+  function applyZoom() {
+    $("#map-stage").style.width = zoom * 100 + "%";
+    $("#map-scroll").classList.toggle("is-zoomed", zoom > 1);
+  }
+
+  // На невеликій карті підписи стискаються до значків, щоб не налазити один на одного;
+  // повна назва — у поточної локації, при наведенні/фокусі або коли карту наближено.
+  function watchCompact() {
+    const stage = $("#map-stage");
+    const update = () => stage.classList.toggle("is-compact", use3D && stage.clientWidth < 1100);
+    if (window.ResizeObserver) new ResizeObserver(update).observe(stage);
+    update();
+  }
+
+  function syncMotionButton() {
+    const btn = $('[data-tool="motion"]');
+    const off = UI.motion() === "off";
+    btn.setAttribute("aria-pressed", String(off));
+    btn.setAttribute("aria-label", off ? "Увімкнути анімацію світу" : "Поставити анімацію на паузу");
+    btn.innerHTML = off ? "&#9654;" : "&#10074;&#10074;";
+  }
+
+  function setupMapTools() {
+    watchCompact();
+    syncMotionButton();
+    $("#map-tools").addEventListener("click", (event) => {
+      const btn = event.target.closest("[data-tool]");
+      if (!btn || !map3d) return;
+      const tool = btn.dataset.tool;
+      if (tool === "motion") {
+        const on = UI.motion() === "off";
+        UI.setMotion(on);
+        syncMotionButton();
+        if (on) map3d.start(); else map3d.stop();
+        return;
+      }
+      if (tool === "rotate-left" || tool === "rotate-right") {
+        map3d.rotate(tool === "rotate-left" ? -1 : 1);
+        const states = locStates();
+        renderPath(states);
+        renderLabels(states);
+      } else {
+        zoom = Math.max(1, Math.min(2.5, zoom + (tool === "zoom-in" ? 0.5 : -0.5)));
+        applyZoom();
+      }
+    });
+    // Перетягування карти мишею, коли вона збільшена.
+    const scroller = $("#map-scroll");
+    let drag = null;
+    scroller.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "mouse" || e.target.closest("button, a")) return;
+      drag = { x: e.clientX, y: e.clientY, left: scroller.scrollLeft, top: scroller.scrollTop };
+      scroller.classList.add("is-dragging");
+    });
+    window.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      scroller.scrollLeft = drag.left - (e.clientX - drag.x);
+      scroller.scrollTop = drag.top - (e.clientY - drag.y);
+    });
+    window.addEventListener("pointerup", () => {
+      drag = null;
+      scroller.classList.remove("is-dragging");
+    });
   }
 
   /* ---------- панель локації (список рівнів) ---------- */
@@ -427,6 +538,7 @@
   function showView() {
     const view = currentView();
     VIEWS.forEach((v) => { document.getElementById("view-" + v).hidden = v !== view; });
+    if (map3d && view !== "map") map3d.stop();
     UI.setActiveNav($("#sidebar"), view);
     if (view === "hub") renderHub();
     if (view === "projects") renderProjects();
@@ -446,6 +558,7 @@
   /* ---------- старт ---------- */
 
   UI.renderSidebar($("#sidebar"), currentView(), "");
+  setupMapTools();
   renderAll();
   if (currentView() === "map") celebrateNewTrophies();
 
@@ -491,13 +604,11 @@
   });
 
   // Легка анімація світу: вогнища, портали, блискавка (~3 кадри/с).
-  // Поважаємо налаштування «зменшити рух».
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduceMotion) {
-    setInterval(() => {
-      frame++;
-      if (!$("#view-map").hidden) drawMap();
-      if (!$("#view-hub").hidden) drawHub();
-    }, 350);
-  }
+  // Працює, доки гравець не поставив анімацію на паузу.
+  setInterval(() => {
+    if (UI.motion() === "off") return;
+    frame++;
+    if (!$("#view-map").hidden) drawMap();
+    if (!$("#view-hub").hidden) drawHub();
+  }, 350);
 })();
