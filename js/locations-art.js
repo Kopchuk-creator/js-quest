@@ -72,3 +72,67 @@ window.LOCATION_ART.js = {
     trophy: [915, 150],
   },
 };
+
+// Світ HTML/CSS: ілюстрації без верхньої смуги, тож crop: 0.
+window.LOCATION_ART.web = {
+  1: {
+    src: "assets/locations/web-1.webp", w: 1586, h: 992, crop: 0,
+    nodes: [[424, 715], [590, 632], [763, 546], [1021, 476], [1249, 368], [1345, 248]],
+    trophy: [1395, 205],
+  },
+  2: {
+    src: "assets/locations/web-2.webp", w: 1586, h: 992, crop: 0,
+    nodes: [[343, 736], [619, 596], [856, 463], [1128, 356], [1303, 243]],
+    trophy: [1345, 195],
+  },
+  3: {
+    src: "assets/locations/web-3.webp", w: 1586, h: 992, crop: 0,
+    nodes: [[357, 743], [582, 655], [813, 563], [1080, 488], [1250, 408]],
+    trophy: [1300, 360],
+  },
+  4: {
+    src: "assets/locations/web-4.webp", w: 1586, h: 992, crop: 0,
+    nodes: [[367, 740], [588, 603], [995, 395], [1153, 303], [1297, 205]],
+    trophy: [1345, 150],
+  },
+  5: {
+    src: "assets/locations/web-5.webp", w: 1586, h: 992, crop: 0,
+    nodes: [[348, 750], [604, 598], [828, 485], [1168, 337], [1302, 282]],
+    trophy: [1440, 255],
+  },
+  6: {
+    src: "assets/locations/web-6.webp", w: 1586, h: 992, crop: 0,
+    nodes: [[345, 742], [686, 541], [1006, 406], [1300, 276]],
+    trophy: [1380, 235],
+  },
+  7: {
+    src: "assets/locations/web-7.webp", w: 1586, h: 992, crop: 0,
+    nodes: [[306, 680], [549, 535], [828, 449], [1066, 365], [1315, 287]],
+    trophy: [1350, 225],
+  },
+  8: {
+    src: "assets/locations/web-8.webp", w: 1586, h: 992, crop: 0,
+    nodes: [[384, 802], [754, 487], [1046, 351], [1283, 245]],
+    trophy: [1300, 190],
+  },
+  9: {
+    src: "assets/locations/web-9.webp", w: 1586, h: 992, crop: 0,
+    nodes: [[341, 742], [680, 547], [983, 411], [1274, 287]],
+    trophy: [1335, 238],
+  },
+  10: {
+    src: "assets/locations/web-10.webp", w: 1586, h: 992, crop: 0,
+    nodes: [[431, 718], [846, 471], [1271, 220]],
+    trophy: [1320, 185],
+  },
+  11: {
+    src: "assets/locations/web-11.webp", w: 1586, h: 992, crop: 0,
+    nodes: [[411, 775], [722, 623], [1001, 524], [1223, 417]],
+    trophy: [1300, 385],
+  },
+  12: {
+    src: "assets/locations/web-12.webp", w: 1586, h: 992, crop: 0,
+    nodes: [[345, 788], [832, 587], [1164, 453]],
+    trophy: [1210, 418],
+  },
+};
