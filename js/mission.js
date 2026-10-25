@@ -197,7 +197,9 @@
   /* ---------- сцена ---------- */
 
   function drawScene() {
-    Art.renderScene($("#scene"), loc.id, state.sceneProgress, { frame: state.frame, sparkle: state.sparkle, height: 176 });
+    // На вузьких екранах сцена нижча, щоб завдання не ховалося під нею.
+    const height = window.innerWidth <= 760 ? 128 : 176;
+    Art.renderScene($("#scene"), loc.id, state.sceneProgress, { frame: state.frame, sparkle: state.sparkle, height });
   }
 
   function animateSolve(from, to) {

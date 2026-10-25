@@ -527,7 +527,7 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; }
 
 .m-scene { position: relative; overflow: hidden; border-radius: var(--r-lg); border: 1px solid var(--border); background: #0c0d0e; }
-.m-scene canvas { width: 100%; height: auto; aspect-ratio: 192 / 176; }
+.m-scene canvas { width: 100%; height: auto; }
 .xp-chip {
   position: absolute; top: var(--s4); right: var(--s4); display: inline-flex; align-items: center; gap: var(--s2);
   padding: 8px 14px; border-radius: var(--r); background: rgba(17, 18, 19, 0.85); border: 1px solid var(--border-strong);
@@ -647,7 +647,6 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
 
 @media (max-width: 420px) {
   .main { padding-left: var(--s3); padding-right: var(--s3); }
-  .subtitle br { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

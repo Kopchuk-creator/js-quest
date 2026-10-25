@@ -366,6 +366,7 @@
 
   window.addEventListener("hashchange", () => {
     showView();
+    window.scrollTo(0, 0);
     $("#main").focus({ preventScroll: true });
   });
 
