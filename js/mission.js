@@ -27,10 +27,25 @@
   const indexInLoc = loc.levels.indexOf(levelId);
   const isCodeTask = level.taskType === "write-function" || level.taskType === "fix-code";
 
+  // Послідовне розблокування: до закритої місії по прямому посиланню не потрапити.
+  const startProgress = GameStore.load();
+  if (!Game.isUnlocked(startProgress, levelId)) {
+    const current = Game.currentLevelId(startProgress);
+    main.innerHTML =
+      '<section class="card locked-screen"><div class="locked-art"></div><h1>Ця місія ще за туманом</h1>' +
+      "<p>«" + UI.esc(level.title) + "» відкриється, щойно ти пройдеш попередню місію. Шлях королівства прокладають крок за кроком.</p>" +
+      '<div class="locked-actions"><a class="btn btn-primary" href="level.html?id=' + current + '">' + UI.icon("play") + "До поточної місії</a>" +
+      '<a class="btn btn-ghost" href="../index.html#map">' + UI.icon("map") + "На карту</a></div></section>";
+    Art.mount($(".locked-art"), Art.landmark(loc.id, 1, 0, true), "Затуманена локація");
+    return;
+  }
+  const alreadyDone = startProgress.completed.includes(levelId);
+
   const state = {
     solved: false,
     running: false,
-    sceneProgress: indexInLoc / loc.levels.length,
+    // Пройдена місія показує вже відновлену сцену.
+    sceneProgress: (indexInLoc + (alreadyDone ? 1 : 0)) / loc.levels.length,
     frame: 0,
     sparkle: null,
   };
@@ -243,6 +258,18 @@
         return;
       }
       escapeTab = false;
+      // «}» на порожньому рядку з відступом — зсуваємо дужку на рівень вище.
+      if (e.key === "}" && textarea.selectionStart === textarea.selectionEnd) {
+        const { selectionStart, value } = textarea;
+        const lineStart = value.lastIndexOf("\n", selectionStart - 1) + 1;
+        const before = value.slice(lineStart, selectionStart);
+        if (/^ {2,}$/.test(before)) {
+          e.preventDefault();
+          textarea.selectionStart = selectionStart - 2;
+          insertText("}");
+          return;
+        }
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         const { selectionStart, value } = textarea;
         const lineStart = value.lastIndexOf("\n", selectionStart - 1) + 1;
@@ -255,11 +282,23 @@
     });
   }
 
-  // Точка розширення для збереження чернеток (див. логіку прогресу).
+  // Чернетка коду зберігається, щоб гравець продовжив з того ж місця після перезавантаження.
   function initialCode() {
-    return level.starterCode;
+    return GameStore.getDraft(levelId) ?? level.starterCode;
   }
-  function onCodeInput() {}
+
+  let draftTimer = null;
+  function onCodeInput(isReset) {
+    clearTimeout(draftTimer);
+    if (isReset) {
+      GameStore.clearDraft(levelId);
+      return;
+    }
+    draftTimer = setTimeout(() => {
+      if (textarea.value === level.starterCode) GameStore.clearDraft(levelId);
+      else GameStore.saveDraft(levelId, textarea.value);
+    }, 400);
+  }
 
   /* ---------- консоль, чеклист, результат ---------- */
 
@@ -297,6 +336,11 @@
   }
 
   function setResult(kind, title, text) {
+    if (kind === "idle" && alreadyDone && !state.solved) {
+      kind = "success";
+      title = "Місію вже пройдено";
+      text = "Можеш повторити її для практики (досвід повторно не нараховується) або рушати далі.";
+    }
     const box = $("#result");
     box.className = "result" + (kind === "success" ? " is-success" : kind === "error" ? " is-error" : "");
     const iconName = kind === "success" ? "check" : kind === "error" ? "close" : "compass";
@@ -417,18 +461,81 @@
     afterFail(failCount);
   }
 
-  // Точки розширення для логіки прогресу.
-  function afterFail() {}
+  // Невдача нічого не забирає: лише рахуємо спроби, щоб наставник підказував дедалі конкретніше.
+  function afterFail(count) {
+    if (!alreadyDone) Game.recordFail(levelId);
+    if (count >= 3) offerSolution();
+  }
+
+  function offerSolution() {
+    const slot = $("#solution-slot");
+    if (slot.firstChild) return;
+    slot.innerHTML = '<button type="button" class="btn btn-ghost" id="show-solution">' + UI.icon("bulb") + "Показати рішення</button>";
+    $("#show-solution").addEventListener("click", () => {
+      if (isCodeTask) {
+        textarea.value = level.solution;
+        syncEditor();
+        onCodeInput();
+      } else if (level.taskType === "predict-output") {
+        document.querySelectorAll(".answer-line input").forEach((input, i) => { input.value = level.expectedAnswer[i]; });
+      } else if (level.taskType === "multiple-choice") {
+        const index = level.options.indexOf(level.expectedAnswer);
+        document.querySelectorAll('input[name="choice"]')[index].checked = true;
+      } else {
+        document.querySelectorAll(".blank-input").forEach((input, i) => { input.value = level.expectedAnswer[i][0]; });
+      }
+      setMentor("Ось як це можна розв'язати. Розберись у рішенні, а потім натисни «" + (isCodeTask ? "Запустити" : "Перевірити") + "».");
+    });
+    $("#hint").open = true;
+  }
 
   function succeed() {
     state.solved = true;
+    const progressBefore = GameStore.load();
+    const firstTry = failCount === 0 && !progressBefore.fails[levelId];
+    // Чернетку не стираємо: повернувшись до пройденої місії, гравець побачить власне рішення.
+    const outcome = Game.completeLevel(levelId, firstTry);
+
+    const text = outcome.alreadyDone
+      ? "Усі перевірки пройдено. Повторення — мати навчання!"
+      : "Усі перевірки пройдено. " + level.worldEvent + (firstTry && outcome.progress.streak > 1 ? " Серія з першої спроби: " + outcome.progress.streak + "!" : "");
     setMentor("Чудово! " + level.worldEvent, "success");
-    setResult("success", "Місію виконано!", "Усі перевірки пройдено. " + level.worldEvent);
+    setResult("success", outcome.alreadyDone ? "Знову вдалося!" : "Місію виконано!", text);
     const from = state.sceneProgress;
     animateSolve(from, Math.max(from, (indexInLoc + 1) / loc.levels.length));
-    $("#xp-chip").classList.add("is-earned");
+
+    if (!outcome.alreadyDone) {
+      const chip = $("#xp-chip");
+      chip.classList.add("is-earned");
+      chip.innerHTML = '<span class="xp-badge">XP</span>+' + outcome.xpGained + " XP отримано";
+      document.querySelectorAll(".dot")[indexInLoc].classList.replace("is-current", "is-done");
+      UI.renderSidebar($("#sidebar"), "practice", "../");
+      if (outcome.leveledUp) {
+        setTimeout(() => UI.toast(UI.icon("star") + " <span><strong>Новий рівень героя: " + outcome.hero.level + "!</strong><br>Досвід росте разом із тобою.</span>"), 900);
+      }
+      if (outcome.location) celebrateLocation(outcome.location);
+    }
     const next = $("#next-btn");
     if (next) next.focus({ preventScroll: true });
+  }
+
+  // Вся локація пройдена: світова подія + трофей в інвентар.
+  function celebrateLocation(location) {
+    setTimeout(() => {
+      UI.toast(
+        '<span class="toast-icon"></span><span><strong>Світова подія: ' + UI.esc(location.event) +
+        "</strong><br>Отримано трофей «" + UI.esc(location.trophy.name) + "»</span>",
+        "is-trophy"
+      );
+      const slot = document.querySelector(".toast:last-child .toast-icon");
+      if (slot) Art.mount(slot, Art.item(location.trophy.icon));
+    }, 1700);
+    const progress = GameStore.load();
+    if (!progress.celebrated.includes(location.id)) {
+      progress.celebrated.push(location.id);
+      GameStore.save(progress);
+    }
+    $("#result p").innerHTML += " <strong>" + UI.esc(location.event) + "!</strong>";
   }
 
   function reset() {
@@ -475,7 +582,4 @@
       drawScene();
     }, 450);
   }
-
-  // Доступ для логіки прогресу (додається нижче в цьому ж файлі).
-  window.__mission = { level, loc, state, setResult, setMentor, succeed, nextHref };
 })();
