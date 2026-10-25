@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Manrope:wght@500;600;700;800&display=swap">
-  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/style.css?v=20261026a">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23f7d23a'/><text x='8' y='12' font-size='9' font-family='monospace' font-weight='bold' text-anchor='middle' fill='%23121314'>{}</text></svg>">
 </head>
 <body data-page="mission">
@@ -18,17 +18,36 @@
     <main class="main" id="main" tabindex="-1"></main>
   </div>
 
-  <script src="../js/storage.js"></script>
-  <script src="../js/worlds.js"></script>
-  <script src="../js/levels.js"></script>
-  <script src="../js/levels-web.js"></script>
-  <script src="../js/game.js"></script>
-  <script src="../js/art.js"></script>
-  <script src="../js/art-web.js"></script>
-  <script src="../js/locations-art.js"></script>
-  <script src="../js/ui.js"></script>
-  <script src="../js/handbook.js"></script>
-  <script src="../js/checker.js"></script>
-  <script src="../js/mission.js"></script>
+  <script>
+    // Якщо скрипт гри впав під час побудови сторінки (наприклад, браузер узяв із кешу
+    // файли різних версій), замість порожнього екрана — пояснення й кнопка «Оновити».
+    (function () {
+      var shown = false;
+      window.addEventListener("error", function (e) {
+        if (shown || !e.filename || e.filename.indexOf("/js/") === -1) return;
+        setTimeout(function () {
+          var main = document.getElementById("main");
+          if (shown || !main || main.innerText.trim()) return;
+          shown = true;
+          main.innerHTML = '<section class="card locked-screen"><h1>Сторінка не завантажилась</h1>' +
+            "<p>Схоже, браузер узяв частину файлів гри зі старої версії. Онови сторінку — твій прогрес не загубиться.</p>" +
+            '<div class="locked-actions"><button type="button" class="btn btn-primary" id="boot-reload">Оновити сторінку</button></div></section>';
+          document.getElementById("boot-reload").addEventListener("click", function () { location.reload(); });
+        }, 0);
+      });
+    })();
+  </script>
+  <script src="../js/storage.js?v=20261026a"></script>
+  <script src="../js/worlds.js?v=20261026a"></script>
+  <script src="../js/levels.js?v=20261026a"></script>
+  <script src="../js/levels-web.js?v=20261026a"></script>
+  <script src="../js/game.js?v=20261026a"></script>
+  <script src="../js/art.js?v=20261026a"></script>
+  <script src="../js/art-web.js?v=20261026a"></script>
+  <script src="../js/locations-art.js?v=20261026a"></script>
+  <script src="../js/ui.js?v=20261026a"></script>
+  <script src="../js/handbook.js?v=20261026a"></script>
+  <script src="../js/checker.js?v=20261026a"></script>
+  <script src="../js/mission.js?v=20261026a"></script>
 </body>
 </html>
