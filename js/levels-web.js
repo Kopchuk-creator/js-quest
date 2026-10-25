@@ -2131,13 +2131,13 @@ body { font-family: "Mill", Georgia, serif; }`,
       missionStory: "Поки вантажиться фірмовий шрифт вітряків, гості бачать порожні таблички. Нехай текст буде видно одразу.",
       worldEvent: "Таблички вітряків видно ще до завантаження шрифту.",
       taskType: "fix-markup",
-      prompt: "Додай у `@font-face` `font-display: swap`, а `body` дай ланцюжок `\"Island\", Georgia, serif`. (`local(\"Georgia\")` у `src` — шрифт, установлений у системі: якщо він є, файл не завантажується.)",
+      prompt: "Додай у `@font-face` `font-display: swap`, а `body` дай ланцюжок `\"Island\", Georgia, serif`. (У пісочниці немає файлів шрифтів, тож `src` тут бере шрифти, встановлені в системі, через `local()`; у справжньому проєкті там був би `url(\"…woff2\")`.)",
       starterHtml: `<h1>Вітряки швидкості</h1>
 <p>Мелемо борошно щодня з шостої ранку.</p>
 `,
       starterCss: `@font-face {
   font-family: "Island";
-  src: local("Georgia"), url("island.woff2") format("woff2");
+  src: local("Georgia"), local("Noto Serif"), local("DejaVu Serif");
 }
 
 body {
@@ -2152,7 +2152,7 @@ body {
 <p>Мелемо борошно щодня з шостої ранку.</p>
 `, css: `@font-face {
   font-family: "Island";
-  src: local("Georgia"), url("island.woff2") format("woff2");
+  src: local("Georgia"), local("Noto Serif"), local("DejaVu Serif");
   font-display: swap;
 }
 
