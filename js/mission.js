@@ -214,7 +214,7 @@
       '<section class="card m-editor" aria-label="Робоча зона">' + centerHtml() + "</section>" +
       '<div class="m-side">' +
       '<section class="m-scene" aria-label="Сцена локації">' +
-      '<canvas class="pixel" id="scene" role="img" aria-label="Сцена: ' + UI.esc(loc.name) + '"></canvas>' +
+      sceneHtml() +
       '<span class="xp-chip" id="xp-chip"><span class="xp-badge">XP</span>+' + Game.xpFor(level) + " XP</span>" +
       "</section>" +
       '<section class="result" id="result" aria-live="polite"></section>' +
@@ -228,9 +228,73 @@
     setResult("idle");
   }
 
-  /* ---------- сцена ---------- */
+  /* ---------- сцена ----------
+     Якщо в локації є ілюстрація — показуємо її, наближену до диска цієї місії,
+     а на передньому плані стоїть наш Мандрівник (дивиться на локацію).
+     Пройдені диски — з галочкою, поточний світиться. Інакше — піксельна сцена. */
+
+  const sceneArt = ((window.LOCATION_ART || {})[Game.WORLD_ID] || {})[loc.id] || null;
+  const SCENE_ZOOM = 2.3; // ілюстрація ширша за вікно сцени в стільки разів
+
+  function sceneHtml() {
+    if (!sceneArt) return '<canvas class="pixel" id="scene" role="img" aria-label="Сцена: ' + UI.esc(loc.name) + '"></canvas>';
+    const a = sceneArt;
+    const visibleH = a.h - a.crop;
+    const done = Game.load().completed;
+    const disks = loc.levels.map((id, i) => {
+      const n = a.nodes[i];
+      if (!n) return "";
+      const st = done.includes(id) ? "is-done" : id === levelId ? "is-current" : "";
+      return '<span class="scene-disk ' + st + '" data-level="' + id + '" style="left:' + (n[0] / a.w) * 100 + "%;top:" + ((n[1] - a.crop) / visibleH) * 100 + '%">' +
+        (st === "is-done" ? UI.icon("check") : "") + "</span>";
+    }).join("");
+    return '<div class="scene-art" id="scene-art" role="img" aria-label="' + UI.esc("Сцена: " + loc.name + ", місія " + (indexInLoc + 1) + " з " + loc.levels.length) + '">' +
+      '<div class="scene-pan" id="scene-pan" style="width:' + SCENE_ZOOM * 100 + "%;aspect-ratio:" + a.w + " / " + visibleH + '">' +
+      '<img class="scene-bg" src="../' + a.src + '" alt="" style="top:' + (-a.crop / visibleH) * 100 + '%">' + disks + "</div>" +
+      '<img class="scene-hero" id="scene-hero" src="../assets/art/hero-back.png" width="101" height="113" alt="">' +
+      "</div>";
+  }
+
+  // Зсуває ілюстрацію так, щоб диск місії id був у полі зору (трохи правіше центру — зліва стоїть герой).
+  function focusScene(id) {
+    const box = $("#scene-art"), pan = $("#scene-pan");
+    if (!box || !pan) return;
+    const i = loc.levels.indexOf(id);
+    const n = sceneArt.nodes[i] || sceneArt.nodes[0];
+    const cw = box.clientWidth, ch = box.clientHeight;
+    const pw = pan.offsetWidth, ph = pan.offsetHeight;
+    const tx = (n[0] / sceneArt.w) * pw, ty = ((n[1] - sceneArt.crop) / (sceneArt.h - sceneArt.crop)) * ph;
+    const left = Math.min(0, Math.max(cw - pw, cw * 0.6 - tx));
+    const top = Math.min(0, Math.max(ch - ph, ch * 0.42 - ty));
+    pan.style.transform = "translate(" + Math.round(left) + "px," + Math.round(top) + "px)";
+  }
+
+  // Місію пройдено: диск стає зеленим, герой радіє, а погляд переходить до наступної місії локації.
+  function celebrateScene() {
+    const disk = document.querySelector('.scene-disk[data-level="' + levelId + '"]');
+    if (disk) {
+      disk.classList.remove("is-current");
+      disk.classList.add("is-done", "is-just-done");
+      disk.innerHTML = UI.icon("check");
+    }
+    const hero = $("#scene-hero");
+    if (hero) {
+      hero.classList.remove("is-cheer");
+      void hero.offsetWidth;
+      hero.classList.add("is-cheer");
+    }
+    const next = loc.levels[indexInLoc + 1];
+    if (next) {
+      setTimeout(() => {
+        const nd = document.querySelector('.scene-disk[data-level="' + next + '"]');
+        if (nd && !nd.classList.contains("is-done")) nd.classList.add("is-next");
+        focusScene(next);
+      }, 900);
+    }
+  }
 
   function drawScene() {
+    if (sceneArt) return; // ілюстрована сцена статична — анімації в CSS
     // На вузьких екранах сцена нижча, щоб завдання не ховалося під нею.
     const height = window.innerWidth <= 760 ? 128 : 176;
     Art.renderScene($("#scene"), loc.id, state.sceneProgress, { frame: state.frame, sparkle: state.sparkle, height, world: Game.WORLD_ID });
@@ -619,8 +683,11 @@
       : "Усі перевірки пройдено. " + level.worldEvent + (firstTry && outcome.progress.streak > 1 ? " Серія з першої спроби: " + outcome.progress.streak + "!" : "");
     setMentor("Чудово! " + level.worldEvent, "success");
     setResult("success", outcome.alreadyDone ? "Знову вдалося!" : "Місію виконано!", text);
-    const from = state.sceneProgress;
-    animateSolve(from, Math.max(from, (indexInLoc + 1) / loc.levels.length));
+    if (sceneArt) celebrateScene();
+    else {
+      const from = state.sceneProgress;
+      animateSolve(from, Math.max(from, (indexInLoc + 1) / loc.levels.length));
+    }
 
     if (!outcome.alreadyDone) {
       const chip = $("#xp-chip");
@@ -679,6 +746,13 @@
   render();
   if (usesEditor) setupEditor();
   drawScene();
+  if (sceneArt) {
+    const bg = document.querySelector(".scene-bg");
+    const refocus = () => focusScene(document.querySelector(".scene-disk.is-next") ? loc.levels[indexInLoc + 1] : levelId);
+    if (bg && !bg.complete) bg.addEventListener("load", refocus, { once: true });
+    refocus();
+    if (window.ResizeObserver) new ResizeObserver(refocus).observe($("#scene-art"));
+  }
 
   $("#run").addEventListener("click", run);
   $("#reset").addEventListener("click", reset);

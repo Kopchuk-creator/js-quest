@@ -770,6 +770,31 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
 
 .m-scene { position: relative; overflow: hidden; border-radius: var(--r-lg); border: 1px solid var(--border); background: #0c0d0e; }
 .m-scene canvas { width: 100%; height: auto; }
+
+/* Ілюстрована сцена місії: частина ілюстрації локації + Мандрівник на передньому плані. */
+.scene-art { position: relative; aspect-ratio: 1.1; overflow: hidden; background: #0c0d0e; }
+.scene-pan { position: absolute; left: 0; top: 0; overflow: hidden; transition: transform 0.9s var(--ease); will-change: transform; }
+.scene-bg { position: absolute; left: 0; width: 100%; height: auto; display: block; user-select: none; -webkit-user-drag: none; }
+.scene-disk {
+  position: absolute; width: 4.6%; aspect-ratio: 1.9; transform: translate(-50%, -50%); border-radius: 50%;
+  display: grid; place-items: center; pointer-events: none;
+}
+.scene-disk.is-done { background: rgba(94, 224, 160, 0.42); border: 2px solid var(--mint); box-shadow: 0 0 12px rgba(94, 224, 160, 0.7); color: #0d2a1c; }
+.scene-disk.is-done .icon { width: 46%; height: auto; stroke-width: 3.5; color: #fff; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.5)); }
+.scene-disk.is-current, .scene-disk.is-next { border: 2px solid var(--yellow); box-shadow: 0 0 0 4px rgba(247, 210, 58, 0.25), 0 0 18px rgba(247, 210, 58, 0.8); animation: disk-glow 1.6s ease-in-out infinite; }
+.scene-disk.is-just-done { animation: disk-pop 0.7s var(--ease); }
+@keyframes disk-glow { 50% { box-shadow: 0 0 0 7px rgba(247, 210, 58, 0.12), 0 0 26px rgba(247, 210, 58, 0.95); } }
+@keyframes disk-pop { 0% { transform: translate(-50%, -50%) scale(0.6); } 60% { transform: translate(-50%, -50%) scale(1.25); } 100% { transform: translate(-50%, -50%) scale(1); } }
+.scene-hero {
+  position: absolute; left: 3%; bottom: -2%; height: 44%; width: auto; pointer-events: none;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45)); transform-origin: 50% 100%;
+  animation: hero-breathe 3.2s ease-in-out infinite;
+}
+.scene-hero.is-cheer { animation: hero-cheer 0.9s var(--ease); }
+@keyframes hero-breathe { 50% { transform: translateY(-1.5%) scale(1.01); } }
+@keyframes hero-cheer { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-14%); } 55% { transform: translateY(0); } 72% { transform: translateY(-6%); } }
+html.motion-off .scene-hero, html.motion-off .scene-disk { animation: none; }
+html.motion-off .scene-pan { transition: none; }
 .xp-chip {
   position: absolute; top: var(--s4); right: var(--s4); display: inline-flex; align-items: center; gap: var(--s2);
   padding: 8px 14px; border-radius: var(--r); background: rgba(17, 18, 19, 0.85); border: 1px solid var(--border-strong);
@@ -890,6 +915,9 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
   .answer-line { grid-template-columns: minmax(0, 1fr) 24px; }
   .tab { padding: 10px 10px; gap: 6px; font-size: 13px; }
   .answer-line label { grid-column: 1 / -1; }
+  .scene-art { aspect-ratio: 1.6; }
+  /* Герой більший: на ширшому вікні він має закривати намальованого на ілюстрації. */
+  .scene-hero { height: 62%; }
 }
 
 @media (max-width: 420px) {
@@ -899,6 +927,8 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
 /* «Зменшити рух»: прибираємо в'їзди панелей і переходи; спокійне життя світу лишається. */
 @media (prefers-reduced-motion: reduce) {
   .location-panel, .drawer[open], .toast, .result.is-success, .xp-chip.is-earned { animation: none !important; }
+  .scene-pan { transition: none !important; }
+  .scene-hero, .scene-disk { animation: none !important; }
   *, *::before, *::after { transition-duration: 0.01ms !important; }
   .trail.is-next { animation-duration: 3s; }
 }
