@@ -468,6 +468,166 @@
     return report;
   }
 
+  /* =========================================================
+     HTML і CSS (світ «Острів будівельників»)
+     Сторінка гравця рендериться в ізольованому iframe:
+     sandbox без allow-scripts — жоден скрипт зі сторінки не виконається,
+     а allow-same-origin дає тестам читати DOM і обчислені стилі.
+     ========================================================= */
+
+  const VOID_TAGS = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
+
+  // Дружній «лінтер» розмітки: браузер мовчки виправляє незакриті теги,
+  // а новачкові корисно знати, що він їх пропустив.
+  function lintHtml(html) {
+    const warnings = [];
+    const clean = html.replace(/<!--[\s\S]*?-->/g, "").replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, "");
+    const stack = [];
+    const re = /<\/?([a-zA-Z][\w-]*)\b[^>]*?(\/?)>/g;
+    let m;
+    while ((m = re.exec(clean))) {
+      const tag = m[1].toLowerCase();
+      const closing = m[0][1] === "/";
+      if (VOID_TAGS.has(tag) || m[2] === "/") continue;
+      if (!closing) { stack.push(tag); continue; }
+      const idx = stack.lastIndexOf(tag);
+      if (idx === -1) {
+        warnings.push("Зайвий закривальний тег </" + tag + "> — для нього немає відкривального.");
+        continue;
+      }
+      stack.splice(idx).slice(1).forEach((t) => warnings.push("Тег <" + t + "> не закрито — додай </" + t + ">."));
+    }
+    stack.forEach((t) => {
+      if (!["html", "head", "body"].includes(t)) warnings.push("Тег <" + t + "> не закрито — додай </" + t + ">.");
+    });
+    return warnings.slice(0, 5);
+  }
+
+  // Картинки із завдань (ship.svg, panorama.svg…) лежать у assets/sandbox/:
+  // <base> робить їхні відносні адреси робочими і в перевірці, і в перегляді.
+  const SANDBOX_BASE = (function () {
+    try {
+      const src = (document.currentScript && document.currentScript.src) || "";
+      return src ? new URL("../assets/sandbox/", src).href : "";
+    } catch (e) {
+      return "";
+    }
+  })();
+
+  function buildDocument(html, css) {
+    const style = (SANDBOX_BASE ? '<base href="' + SANDBOX_BASE + '">' : "") + (css ? "<style>\n" + css + "\n</style>" : "");
+    if (/<html[\s>]|<!doctype/i.test(html)) {
+      if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, style + "</head>");
+      return html.replace(/<body[^>]*>/i, (b) => style + b);
+    }
+    return '<!doctype html><html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+      style + "</head><body>" + html + "</body></html>";
+  }
+
+  // Рендерить документ у прихованому iframe і чекає на завантаження.
+  function renderFrame(docHtml, width) {
+    return new Promise((resolve) => {
+      const frame = document.createElement("iframe");
+      frame.setAttribute("sandbox", "allow-same-origin");
+      frame.setAttribute("aria-hidden", "true");
+      frame.setAttribute("title", "Пісочниця перевірки");
+      frame.tabIndex = -1;
+      frame.style.cssText = "position:fixed;left:-10000px;top:0;width:" + (width || 800) + "px;height:600px;border:0;pointer-events:none;";
+      frame.addEventListener("load", () => resolve(frame), { once: true });
+      frame.srcdoc = docHtml;
+      document.body.appendChild(frame);
+    });
+  }
+
+  function makeMarkupContext(frame, sources) {
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const pick = (target) => {
+      const el = typeof target === "string" ? doc.querySelector(target) : target;
+      if (!el) throw new Error("Елемент «" + target + "» не знайдено на сторінці");
+      return el;
+    };
+    const allRules = () => {
+      const out = [];
+      const walk = (rules, media) => Array.from(rules || []).forEach((r) => {
+        if (r.selectorText !== undefined) out.push({ rule: r, media });
+        else if (r.cssRules) walk(r.cssRules, r.conditionText || (r.media && r.media.mediaText) || media);
+      });
+      Array.from(doc.styleSheets).forEach((sheet) => { try { walk(sheet.cssRules, null); } catch (e) { /* ignore */ } });
+      return out;
+    };
+    return {
+      doc,
+      win,
+      html: sources.html || "",
+      css: sources.css || "",
+      equal: deepEqual,
+      show,
+      $: (sel) => doc.querySelector(sel),
+      $$: (sel) => Array.from(doc.querySelectorAll(sel)),
+      text: (target) => pick(target).textContent.replace(/\s+/g, " ").trim(),
+      lint: () => lintHtml(sources.html || ""),
+      attr: (target, name) => pick(target).getAttribute(name),
+      // Обчислене значення CSS-властивості (назва — як у CSS: "font-size").
+      style: (target, prop, pseudo) => win.getComputedStyle(pick(target), pseudo || null).getPropertyValue(prop).trim(),
+      rect: (target) => pick(target).getBoundingClientRect(),
+      // Нормалізує колір («tomato», «#f00») до вигляду, який повертає getComputedStyle.
+      color(value) {
+        const probe = doc.createElement("span");
+        probe.style.color = value;
+        doc.body.appendChild(probe);
+        const c = win.getComputedStyle(probe).color;
+        probe.remove();
+        return c;
+      },
+      // Правила CSS, чий селектор містить рядок або відповідає регулярному виразу.
+      rules: (match) => allRules().filter(({ rule }) => (match instanceof RegExp ? match.test(rule.selectorText) : rule.selectorText.includes(match))),
+      media: () => allRules().filter((r) => r.media),
+      setWidth(px) {
+        frame.style.width = px + "px";
+        return new Promise((r) => win.requestAnimationFrame(() => r()));
+      },
+    };
+  }
+
+  function stripMarkupComments(text) {
+    return String(text || "").replace(/<!--[\s\S]*?-->/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ");
+  }
+
+  /**
+   * Перевіряє верстку для write-markup / fix-markup.
+   * sources = { html, css }. Повертає той самий формат звіту, що й runCode.
+   */
+  async function runMarkup(level, sources) {
+    const html = sources.html != null ? sources.html : level.starterHtml || "";
+    const css = sources.css != null ? sources.css : level.starterCss || "";
+    const clean = { html: stripMarkupComments(html), css: stripMarkupComments(css) };
+    const codeChecks = (level.codeChecks || []).map((c) => {
+      const text = c.in ? clean[c.in] : clean.html + "\n" + clean.css;
+      return { label: c.label, pass: c.not ? !c.re.test(text) : c.re.test(text) };
+    });
+    const report = { pass: false, results: [], codeChecks, logs: lintHtml(html).map((w) => "⚠ " + w), error: null, declared: null };
+    const docHtml = buildDocument(html, css);
+    for (const tc of level.testCases) {
+      const result = { name: tc.name, pass: false };
+      let frame = null;
+      try {
+        frame = await renderFrame(docHtml, tc.width);
+        const ctx = makeMarkupContext(frame, { html, css });
+        const r = await withTimeout(Promise.resolve().then(() => tc.check(ctx)), TEST_TIMEOUT_MS);
+        Object.assign(result, typeof r === "boolean" ? { pass: r } : r);
+      } catch (e) {
+        result.pass = false;
+        result.actual = e.message;
+      } finally {
+        if (frame) frame.remove();
+      }
+      report.results.push(result);
+    }
+    report.pass = report.results.every((r) => r.pass) && codeChecks.every((c) => c.pass);
+    return report;
+  }
+
   /* ---------- predict-output / multiple-choice / fill-blank ---------- */
 
   // Порівнюємо вивід «по-людськи»: без зайвих пробілів, лапок навколо і регістру.
@@ -479,9 +639,12 @@
 
   function checkPredict(level, answers) {
     const expected = Array.isArray(level.expectedAnswer) ? level.expectedAnswer : [level.expectedAnswer];
+    // Якщо відповідь — число з одиницею (наприклад, px), приймаємо і «250», і «250px».
+    const unit = level.answerUnit ? new RegExp("\\s*" + level.answerUnit + "$", "i") : null;
+    const norm = (text) => { const s = normalizeOutput(text); return unit ? s.replace(unit, "") : s; };
     const lines = expected.map((exp, i) => {
       const given = answers[i] || "";
-      return { expected: exp, given, filled: given.trim() !== "", pass: normalizeOutput(given) === normalizeOutput(exp) };
+      return { expected: exp, given, filled: given.trim() !== "", pass: norm(given) === norm(exp) };
     });
     return { pass: lines.every((l) => l.pass), lines };
   }
@@ -505,6 +668,9 @@
 
   window.Checker = {
     runCode,
+    runMarkup,
+    buildDocument,
+    lintHtml,
     checkPredict,
     checkChoice,
     checkBlank,

@@ -546,6 +546,14 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .tab.is-active { background: var(--surface-2); color: var(--text); box-shadow: inset 0 2px 0 var(--yellow); }
 .tab .js-badge { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 4px; background: var(--yellow); color: var(--yellow-ink); font-size: 10px; font-weight: 800; font-family: var(--mono); }
 .tab.is-readonly .js-badge { background: var(--surface-3); color: var(--text-muted); }
+.tab:hover:not(.is-active) { color: var(--text); background: var(--surface); }
+.tab .icon { width: 16px; height: 16px; }
+.js-badge.is-html { background: #e8663d; color: #1b0d06; width: auto; padding: 0 4px; }
+.js-badge.is-css { background: #4a8fe0; color: #06111f; width: auto; padding: 0 4px; }
+.tab-preview { margin-left: auto; }
+.editor[hidden], .preview[hidden] { display: none; }
+.preview { flex: 1; min-height: 300px; background: #ffffff; display: flex; }
+.preview iframe { flex: 1; width: 100%; min-height: 300px; border: 0; background: #ffffff; }
 
 /* Редактор: textarea і підсвічений <pre> лежать в одній клітинці сітки,
    тож мають однаковий розмір; прокручується весь .editor разом із номерами рядків. */
@@ -735,6 +743,7 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
   .result { flex-wrap: wrap; }
   .result .btn { margin-left: 0; width: 100%; }
   .answer-line { grid-template-columns: minmax(0, 1fr) 24px; }
+  .tab { padding: 10px 10px; gap: 6px; font-size: 13px; }
   .answer-line label { grid-column: 1 / -1; }
 }
 

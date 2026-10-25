@@ -62,7 +62,7 @@
     const showOwn = ownFiles.length && !sameAsSolution && ownFiles.some((f) => f.code.trim());
     const blocks = [
       '<p class="hb-concept">' + UI.md(level.concept) + "</p>",
-      level.example ? codeWithCopy("Приклад", level.example, exampleLang(level)) : "",
+      level.example ? codeWithCopy("Приклад", level.example, UI.guessLang(level.example, exampleLang(level))) : "",
       '<p class="hb-label">Завдання</p><p>' + UI.md(level.prompt) + "</p>",
       showOwn ? ownFiles.map((f) => codeWithCopy("Твоє рішення" + (f.name ? " · " + f.name : ""), f.code, f.lang)).join("") : "",
       isCode

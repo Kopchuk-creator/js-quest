@@ -61,6 +61,15 @@
 
   const TOKEN = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"?|'(?:\\.|[^'\\\n])*'?|`(?:\\.|[^`\\])*`?)|(\b\d+(?:\.\d+)?\b)|([A-Za-z_$Ѐ-ӿ][\w$Ѐ-ӿ]*)|(\s+)|([\s\S])/g;
 
+  // Мова фрагмента у світі HTML/CSS: теги — HTML, «селектор { властивість: … }» — CSS.
+  function guessLang(code, fallback) {
+    if (fallback !== "html") return fallback;
+    const text = String(code || "").trim();
+    if (/^</.test(text) || /<[a-zA-Z!][^>]*>/.test(text)) return "html";
+    if (/[^{}]+\{[^}]*:[^}]*\}/.test(text) || /^@media/.test(text)) return "css";
+    return "html";
+  }
+
   function highlight(code, lang) {
     if (lang === "html") return highlightHtml(code);
     if (lang === "css") return highlightCss(code);
@@ -231,5 +240,5 @@
 
   document.documentElement.classList.toggle("motion-off", motion() === "off");
 
-  window.UI = { icon, esc, md, highlight, renderSidebar, setActiveNav, toast, motion, setMotion };
+  window.UI = { icon, esc, md, highlight, guessLang, renderSidebar, setActiveNav, toast, motion, setMotion };
 })();
