@@ -28,6 +28,8 @@
     flame: '<path d="M12 21c-4 0-6.5-2.6-6.5-6.2 0-3.4 2.6-5.4 3.6-8.3.6 1.7 1.7 2.7 2.7 3.1C12 6.9 13 4.6 14.6 3c.4 3 4 5.4 4 10.6 0 4-2.8 7.4-6.6 7.4Z"/>',
     arrowLeft: '<path d="M19 12H5m6-6-6 6 6 6"/>',
     compass: '<circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+    copy: '<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5V5.5a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"/>',
   };
 
   function icon(name, extraClass) {
@@ -87,6 +89,7 @@
       { id: "map", label: "Карта", icon: "map", href: root + "index.html#map" },
       { id: "practice", label: "Практика", icon: "code", href: root + "levels/level.html?id=" + current },
       { id: "projects", label: "Проєкти", icon: "projects", href: root + "index.html#projects" },
+      { id: "handbook", label: "Довідник", icon: "book", href: root + "index.html#handbook" },
       { id: "trophies", label: "Трофеї", icon: "trophy", href: root + "index.html#trophies" },
     ];
     container.innerHTML =

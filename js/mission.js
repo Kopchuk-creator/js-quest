@@ -174,7 +174,8 @@
       '<span aria-current="page">' + UI.esc(level.title) + "</span></nav>" +
       "<h1>" + UI.esc(level.title) + "</h1>" +
       '<div class="m-progress"><span>Місія ' + (indexInLoc + 1) + " з " + loc.levels.length + "</span>" + dotsHtml() +
-      '<span class="task-chip">' + Game.TASK_LABELS[level.taskType] + "</span></div>" +
+      '<span class="task-chip">' + Game.TASK_LABELS[level.taskType] + "</span>" +
+      '<button type="button" class="btn btn-ghost btn-sm" id="open-handbook" aria-haspopup="dialog">' + UI.icon("book") + "Довідник</button></div>" +
       "</header>" +
       '<section class="card m-task" aria-label="Завдання">' + leftHtml() + "</section>" +
       '<section class="card m-editor" aria-label="Робоча зона">' + centerHtml() + "</section>" +
@@ -495,7 +496,11 @@
     state.solved = true;
     const progressBefore = GameStore.load();
     const firstTry = failCount === 0 && !progressBefore.fails[levelId];
-    // Чернетку не стираємо: повернувшись до пройденої місії, гравець побачить власне рішення.
+    // Рішення гравця зберігаємо одразу: його показують і повернення до місії, і довідник.
+    if (isCodeTask) {
+      clearTimeout(draftTimer);
+      GameStore.saveDraft(levelId, textarea.value);
+    }
     const outcome = Game.completeLevel(levelId, firstTry);
 
     const text = outcome.alreadyDone
@@ -564,6 +569,8 @@
 
   $("#run").addEventListener("click", run);
   $("#reset").addEventListener("click", reset);
+  // Довідник відкривається на поточній локації — щоб швидко підглянути схожі теми.
+  $("#open-handbook").addEventListener("click", () => Handbook.openDrawer({ root: "../", location: loc.id }));
   $("#console-toggle").addEventListener("click", () => {
     const box = $("#console");
     const collapsed = box.classList.toggle("is-collapsed");

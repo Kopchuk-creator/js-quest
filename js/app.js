@@ -338,7 +338,7 @@
 
   /* ---------- розділи ---------- */
 
-  const VIEWS = ["map", "projects", "trophies"];
+  const VIEWS = ["map", "projects", "handbook", "trophies"];
 
   function showView() {
     const name = (location.hash || "#map").slice(1);
@@ -346,9 +346,10 @@
     VIEWS.forEach((v) => { document.getElementById("view-" + v).hidden = v !== view; });
     UI.setActiveNav($("#sidebar"), view);
     if (view === "projects") renderProjects();
+    if (view === "handbook") Handbook.render($("#handbook"), { root: "" });
     if (view === "trophies") renderProfile();
     if (view === "map") renderMap();
-    document.title = "JS Quest — " + { map: "карта світу", projects: "проєкти", trophies: "трофеї" }[view];
+    document.title = "JS Quest — " + { map: "карта світу", projects: "проєкти", handbook: "довідник", trophies: "трофеї" }[view];
   }
 
   function renderAll() {

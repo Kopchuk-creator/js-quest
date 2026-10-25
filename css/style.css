@@ -67,6 +67,8 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 a { color: inherit; }
 button, input, textarea { font: inherit; color: inherit; }
 code { font-family: var(--mono); font-size: 0.88em; background: var(--surface-3); border-radius: 4px; padding: 0.08em 0.35em; }
+/* Лігатури JetBrains Mono перетворюють >= на «≥» — новачок може подумати, що так і треба друкувати. */
+code, pre, textarea, kbd, .text-input { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
 
 .pixel { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
 
@@ -361,6 +363,57 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .trophy.is-owned .trophy-event { color: var(--mint); }
 .trophy .trophy-event .icon { margin-top: 2px; }
 .danger-zone { display: flex; justify-content: flex-end; }
+
+/* ---------- довідник ---------- */
+
+.handbook { padding: var(--s5); }
+.hb-toolbar { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; margin-bottom: var(--s4); }
+.hb-search { flex: 1 1 260px; display: flex; align-items: center; gap: var(--s2); padding: 0 var(--s3); min-height: 44px; background: #0f1012; border: 1px solid var(--border-strong); border-radius: var(--r); color: var(--text-dim); }
+.hb-search:focus-within { border-color: var(--yellow); box-shadow: 0 0 0 3px var(--yellow-soft); }
+.hb-search input { flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--text); font-size: 15px; }
+.hb-filter select { min-height: 44px; padding: 0 var(--s3); background: #0f1012; color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--r); font: inherit; }
+.hb-count { color: var(--text-muted); font-size: 14px; }
+.hb-count strong { color: var(--mint); }
+.hb-list { display: flex; flex-direction: column; gap: var(--s5); }
+.hb-group h2 { display: flex; align-items: baseline; gap: var(--s3); font-size: 18px; font-weight: 800; margin-bottom: var(--s2); }
+.hb-group h2 span { color: var(--text-dim); font-size: 13px; font-weight: 600; }
+.hb-entry { border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-2); margin-bottom: 6px; }
+.hb-entry > summary, .hb-entry.is-locked { display: grid; grid-template-columns: 34px minmax(0, 1fr) 20px; align-items: center; gap: var(--s3); padding: 10px var(--s3); list-style: none; cursor: pointer; }
+.hb-entry > summary::-webkit-details-marker { display: none; }
+.hb-entry.is-locked { cursor: default; opacity: 0.5; background: transparent; border-style: dashed; }
+.hb-num { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--surface-3); color: var(--text-muted); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hb-entry[open] .hb-num, .hb-entry:not(.is-locked) .hb-num { background: var(--mint-soft); color: var(--mint); }
+.hb-title { font-weight: 700; display: flex; flex-direction: column; min-width: 0; }
+.hb-title small { color: var(--text-dim); font-weight: 500; font-size: 12px; }
+.hb-chev { color: var(--text-dim); transition: transform 0.2s; }
+.hb-entry[open] .hb-chev { transform: rotate(180deg); }
+.hb-body { padding: 0 var(--s4) var(--s4); display: flex; flex-direction: column; gap: var(--s3); font-size: 14px; color: var(--text-muted); }
+.hb-concept { color: var(--text); font-size: 15px; }
+.hb-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
+.hb-code-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.hb-copy { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--r-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-muted); font-size: 12px; font-weight: 600; cursor: pointer; min-height: 32px; }
+.hb-copy:hover { color: var(--text); }
+.hb-copy .icon { width: 14px; height: 14px; }
+.hb-output { color: var(--mint); }
+.hb-hint { display: flex; gap: var(--s2); align-items: flex-start; background: var(--yellow-soft); color: var(--text); padding: var(--s3); border-radius: var(--r-sm); }
+.hb-hint .icon { color: var(--yellow); margin-top: 2px; }
+.hb-replay { align-self: flex-start; min-height: 40px; font-size: 14px; }
+.hb-empty { color: var(--text-muted); padding: var(--s6) 0; text-align: center; }
+
+.btn-sm { min-height: 36px; padding: 6px 14px; font-size: 14px; }
+.btn-sm .icon { width: 16px; height: 16px; }
+
+.drawer {
+  margin: 0 0 0 auto; height: 100vh; max-height: 100vh; width: min(560px, 100vw); padding: 0;
+  border: 0; border-left: 1px solid var(--border-strong); background: var(--bg-raised); color: var(--text);
+}
+.drawer[open] { display: flex; flex-direction: column; animation: slideIn 0.25s var(--ease); }
+.drawer::backdrop { background: rgba(0, 0, 0, 0.55); }
+@keyframes slideIn { from { transform: translateX(40px); opacity: 0; } }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s4) var(--s5); border-bottom: 1px solid var(--border); }
+.drawer-head h2 { display: flex; align-items: center; gap: var(--s2); font-size: 20px; font-weight: 800; }
+.drawer-head h2 .icon { color: var(--yellow); }
+.drawer-body { flex: 1; overflow: auto; padding: var(--s4) var(--s5); }
 
 /* ---------- сповіщення ---------- */
 
