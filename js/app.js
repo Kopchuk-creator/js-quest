@@ -72,7 +72,7 @@
     Art.renderHub($("#hub-canvas"), states, frame);
     const W = Art.HUB_W, H = Art.HUB_H;
     $("#hub-labels").innerHTML = states.map((s, i) => {
-      const [x, y] = Art.HUB_POINTS[i];
+      const [x, y] = Art.hubPoints(states.length)[i];
       const style = 'style="left:' + (x / W) * 100 + "%;top:" + ((y + 4) / H) * 100 + '%"';
       const inner = '<span class="loc-name">' + (s.status === "done" ? '<span class="loc-icon is-done">' + UI.icon("check") + "</span>" : "") +
         UI.esc(s.world.name) + "</span>" + '<span class="portal-tech">' + UI.esc(s.world.tech) + "</span>";

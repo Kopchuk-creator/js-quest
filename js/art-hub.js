@@ -10,8 +10,12 @@
   const { makeCanvas, painter, hash, lerpColor } = Art.kit;
 
   const HUB_W = 400, HUB_H = 240;
-  const COLS = [60, 130, 200, 270, 340];
-  const HUB_POINTS = COLS.map((x) => [x, 116]).concat(COLS.map((x) => [x, 194]));
+  // Портали стоять двома рядами; кількість у ряду залежить від кількості світів.
+  function hubPoints(count) {
+    const row = (n, y, from, to) => Array.from({ length: n }, (_, i) => [Math.round(n > 1 ? from + ((to - from) * i) / (n - 1) : (from + to) / 2), y]);
+    const top = Math.ceil(count / 2);
+    return row(top, 116, 44, 356).concat(row(count - top, 194, 64, 336));
+  }
 
   const PW = 24, PH = 32;
 
@@ -146,7 +150,7 @@
       if ((i + frame) % 5 !== 0) g.p(x, y, i % 3 ? "#cfe8f7" : "#ffffff");
     }
     states.forEach((s, i) => {
-      const [x, y] = HUB_POINTS[i];
+      const [x, y] = hubPoints(states.length)[i];
       const p = portal(s.world.color, s.status, frame + i);
       // Світло від відчиненого порталу на плитах.
       if (s.status === "open" || s.status === "done") {
@@ -161,5 +165,5 @@
     g.sprite(hero, 228, 162 - hero.height + (frame % 2), 1);
   }
 
-  Object.assign(Art, { HUB_W, HUB_H, HUB_POINTS, renderHub, portal });
+  Object.assign(Art, { HUB_W, HUB_H, hubPoints, renderHub, portal });
 })();

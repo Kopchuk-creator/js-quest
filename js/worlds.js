@@ -21,4 +21,5 @@ window.WORLDS = [
   { id: "sql",   name: "Шахти даних",        tech: "SQL і бази даних",       color: "#d9b44a", status: "soon", requires: [],             blurb: "SELECT, JOIN, індекси, нормалізація й транзакції." },
   { id: "node",  name: "Пекельні кузні",     tech: "Node.js і Express",      color: "#e0503c", status: "soon", requires: ["js", "sql"],  blurb: "HTTP, REST API, middleware, авторизація." },
   { id: "ops",   name: "Небесна фортеця",    tech: "Безпека і деплой",       color: "#f2f5f7", status: "soon", requires: ["node"],       blurb: "HTTP, CORS, XSS, Docker, CI/CD — фінальний бос." },
+  { id: "py",    name: "Зміїна гавань",      tech: "Python",                 color: "#4a86c8", status: "soon", requires: [],             blurb: "Синтаксис, структури даних, функції, ООП і бекенд на Python." },
 ];

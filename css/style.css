@@ -382,7 +382,7 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 
 .hub-stage { aspect-ratio: 400 / 240; }
 .portal-label { text-decoration: none; }
-.portal-label .loc-name { font-size: 12px; padding: 4px 8px; max-width: 128px; white-space: normal; text-align: center; line-height: 1.25; }
+.portal-label .loc-name { font-size: 12px; padding: 4px 8px; max-width: 112px; white-space: normal; text-align: center; line-height: 1.25; }
 .portal-tech { font-size: 11px; font-weight: 700; color: var(--text-muted); background: rgba(17, 18, 19, 0.8); padding: 1px 8px; border-radius: 6px; }
 .portal-label.is-open .loc-name { border-color: var(--yellow); color: var(--yellow); }
 .portal-label.is-soon .loc-name, .portal-label.is-locked .loc-name { color: var(--text-muted); }
