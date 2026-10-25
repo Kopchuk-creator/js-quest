@@ -47,19 +47,20 @@
       '<div class="xp-bar" role="progressbar" aria-label="Досвід до наступного рівня" aria-valuemin="0" aria-valuemax="' + hero.needed +
       '" aria-valuenow="' + hero.current + '"><span style="width:' + pct + '%"></span></div>';
     document.querySelectorAll(".js-xp").forEach((el) => { el.innerHTML = html; });
+    UI.refreshSidebarHero($("#sidebar"), "");
   }
 
   /* =========================================================
-     Світ-хаб
+     Світ-хаб: зала порталів
      ========================================================= */
 
-  const HUB_STATUS_TEXT = { open: "Портал відчинено", done: "Світ пройдено", locked: "Портал запечатано", soon: "Світ будується" };
+  const HUB_STATUS_TEXT = { open: "портал відчинено", done: "світ пройдено", locked: "портал запечатано", soon: "світ будується" };
 
   function portalStates() {
     return WORLDS.map((w) => {
       const status = Game.worldStatus(w);
       const api = status === "soon" ? null : Game.forWorld(w.id);
-      return { world: w, status, completion: api ? api.completion() : null };
+      return { world: w, status, api, completion: api ? api.completion() : null };
     });
   }
 
@@ -67,47 +68,84 @@
     return world.requires.map((id) => "«" + WORLDS.find((w) => w.id === id).name + "»").join(" і ");
   }
 
+  const isOpen = (s) => s.status === "open" || s.status === "done";
+
+  // Вибраний портал: спершу — світ, у якому гравець був востаннє.
+  let selectedWorld = Game.WORLD_ID;
+
   function renderHub() {
     const states = portalStates();
-    Art.renderHub($("#hub-canvas"), states, frame);
-    const W = Art.HUB_W, H = Art.HUB_H;
-    $("#hub-labels").innerHTML = states.map((s, i) => {
-      const [x, y] = Art.hubPoints(states.length)[i];
-      const style = 'style="left:' + (x / W) * 100 + "%;top:" + ((y + 4) / H) * 100 + '%"';
-      const inner = '<span class="loc-name">' + (s.status === "done" ? '<span class="loc-icon is-done">' + UI.icon("check") + "</span>" : "") +
-        UI.esc(s.world.name) + "</span>" + '<span class="portal-tech">' + UI.esc(s.world.tech) + "</span>";
-      if (s.status === "open" || s.status === "done") {
-        return '<a class="loc-label portal-label is-' + s.status + '" ' + style + ' href="index.html?world=' + s.world.id + '#map">' + inner + "</a>";
-      }
-      return '<button type="button" class="loc-label portal-label is-' + s.status + '" ' + style + ' data-portal="' + s.world.id + '" aria-label="' +
-        UI.esc(s.world.name + ": " + HUB_STATUS_TEXT[s.status]) + '">' + (s.status === "locked" ? '<span class="loc-lock">' + UI.icon("lock") + "</span>" : "") + inner + "</button>";
+    if (!states.some((s) => s.world.id === selectedWorld)) selectedWorld = states[0].world.id;
+    const open = states.filter(isOpen).length;
+    const soon = states.length - open;
+    $("#hub-count").textContent = open + " " + plural(open, "світ доступний", "світи доступні", "світів доступно") + " · " + soon + " незабаром";
+
+    const art = window.HUB_ART;
+    const W = art.w, H = art.h;
+    $("#hub-labels").innerHTML = states.map((s) => {
+      const p = art.portals[s.world.id];
+      if (!p) return "";
+      const [x, y] = p.label;
+      const LABEL_HALF_W = 104, LABEL_HALF_H = 28;
+      const style = "left:" + ((x - LABEL_HALF_W) / W) * 100 + "%;width:" + ((LABEL_HALF_W * 2) / W) * 100 + "%;top:" + (p.top / H) * 100 +
+        "%;height:" + ((y + LABEL_HALF_H - p.top) / H) * 100 + "%";
+      const selected = s.world.id === selectedWorld;
+      const badge = s.status === "done" ? '<span class="portal-badge is-done">' + UI.icon("check") + "</span>" : "";
+      return '<button type="button" class="portal-spot is-' + s.status + (selected ? " is-selected" : "") + '" style="' + style + '" data-portal="' + s.world.id +
+        '" aria-pressed="' + selected + '" aria-label="' + UI.esc(s.world.name + " (" + s.world.tech + "): " + HUB_STATUS_TEXT[s.status]) + '">' +
+        '<span class="portal-label">' + badge + '<strong>' + UI.esc(s.world.name) + "</strong><small>" + UI.esc(s.world.tech) + "</small></span></button>";
     }).join("");
 
-    $("#worlds-grid").innerHTML = states.map((s) => {
-      const c = s.completion;
-      const pct = c ? Math.round(c.ratio * 100) : 0;
-      const action = s.status === "open" || s.status === "done"
-        ? '<a class="btn btn-primary" href="index.html?world=' + s.world.id + '#map">' + UI.icon("portal") + (c && c.done ? "Продовжити" : "Увійти") + "</a>"
-        : '<span class="world-note">' + UI.icon(s.status === "locked" ? "lock" : "hammer") +
-          (s.status === "locked" ? "Спершу пройди " + UI.esc(requirementText(s.world)) : "Світ ще будується — скоро відкриється") + "</span>";
-      return (
-        '<article class="card world-card is-' + s.status + '" style="--world:' + s.world.color + '">' +
-        '<div class="world-portal" data-portal-art="' + s.world.id + '"></div>' +
-        '<div class="world-info"><p class="eyebrow">' + UI.esc(s.world.tech) + "</p><h3>" + UI.esc(s.world.name) + "</h3>" +
-        "<p>" + UI.esc(s.world.blurb) + "</p>" +
-        (c ? '<div class="world-progress"><div class="xp-bar" role="progressbar" aria-label="Пройдено місій" aria-valuemin="0" aria-valuemax="' + c.total +
-          '" aria-valuenow="' + c.done + '"><span style="width:' + pct + '%"></span></div><span>' + c.done + " / " + c.total + "</span></div>" : "") +
-        action + "</div></article>"
-      );
-    }).join("");
-    document.querySelectorAll("[data-portal-art]").forEach((el) => {
-      const s = states.find((st) => st.world.id === el.dataset.portalArt);
-      Art.mount(el, Art.portal(s.world.color, s.status, 0));
-    });
+    renderWorldPanel(states.find((s) => s.world.id === selectedWorld));
+
+    // На вузькому екрані сцена гортається вбік — показуємо вибраний портал.
+    const scene = $(".hub-scene");
+    const spot = $('#hub-labels [data-portal="' + selectedWorld + '"]');
+    if (spot && scene.scrollWidth > scene.clientWidth) {
+      scene.scrollLeft = spot.offsetLeft + spot.offsetWidth / 2 - scene.clientWidth / 2;
+    }
   }
 
-  function drawHub() {
-    Art.renderHub($("#hub-canvas"), portalStates(), frame);
+  // Права панель: опис вибраного світу, прогрес і наступний крок.
+  function renderWorldPanel(s) {
+    const w = s.world;
+    let html = '<p class="eyebrow">' + UI.esc(w.tech) + '</p><h2 class="wp-title">' + UI.esc(w.name) + '</h2><p class="wp-blurb">' + UI.esc(w.blurb) + "</p>";
+    if (!isOpen(s)) {
+      const note = s.status === "locked"
+        ? "Портал відчиниться, коли пройдеш " + UI.esc(requirementText(w)) + "."
+        : "Цей світ ще будується — портал відчиниться згодом." + (w.requires.length ? " Щоб увійти, знадобиться пройти " + UI.esc(requirementText(w)) + "." : "");
+      html += '<p class="wp-note">' + UI.icon(s.status === "locked" ? "lock" : "hammer") + "<span>" + note + "</span></p>";
+      $("#world-panel").innerHTML = html;
+      return;
+    }
+    const api = s.api;
+    const c = s.completion;
+    const pct = Math.round(c.ratio * 100);
+    const progress = api.load();
+    const nextId = api.currentLevelId(progress);
+    const nextLoc = nextId ? api.locationOf(nextId) : null;
+    const thumb = nextLoc && (window.LOCATION_ART || {})[w.id] && window.LOCATION_ART[w.id][nextLoc.id];
+    html +=
+      '<div class="wp-stats">' +
+      '<div class="wp-stat"><span class="wp-ic">' + UI.icon("flag") + "</span>" + c.total + " " + plural(c.total, "місія", "місії", "місій") + "</div>" +
+      '<div class="wp-stat"><span class="wp-ic">' + UI.icon("pin") + "</span>" + api.LOCATIONS.length + " " + plural(api.LOCATIONS.length, "локація", "локації", "локацій") + "</div>" +
+      "</div>" +
+      '<div class="wp-progress"><div class="wp-progress-head"><span>Пройдено ' + c.done + " із " + c.total + "</span><span>" + pct + "%</span></div>" +
+      '<div class="xp-bar is-mint" role="progressbar" aria-label="Пройдено місій" aria-valuemin="0" aria-valuemax="' + c.total + '" aria-valuenow="' + c.done +
+      '"><span style="width:' + Math.max(pct, c.done ? 2 : 0) + '%"></span></div></div>';
+    if (nextLoc) {
+      html +=
+        '<h3 class="wp-subtitle">Твій наступний крок</h3>' +
+        '<a class="next-step" href="index.html?world=' + w.id + "#loc-" + nextLoc.id + '">' +
+        (thumb ? '<img src="' + thumb.src + '" alt="" loading="lazy">' : '<span class="next-step-ph">' + UI.icon("compass") + "</span>") +
+        "<span>" + UI.esc(nextLoc.name) + "</span>" + UI.icon("chevronRight") + "</a>" +
+        '<a class="btn btn-primary btn-block" href="' + api.levelUrl(nextId) + '">' + (c.done ? "Продовжити пригоду" : "Почати пригоду") + UI.icon("arrowRight") + "</a>";
+    } else {
+      html += '<p class="wp-note is-done">' + UI.icon("check") + "<span>Світ повністю відновлено — можна повертатися до будь-якої місії.</span></p>" +
+        '<a class="btn btn-primary btn-block" href="index.html?world=' + w.id + '#map">До карти світу' + UI.icon("arrowRight") + "</a>";
+    }
+    html += '<a class="wp-link" href="index.html?world=' + w.id + '#map">' + UI.icon("map") + "Відкрити карту світу</a>";
+    $("#world-panel").innerHTML = html;
   }
 
   /* =========================================================
@@ -805,10 +843,18 @@
   $("#hub-labels").addEventListener("click", (event) => {
     const btn = event.target.closest("[data-portal]");
     if (!btn) return;
-    const world = WORLDS.find((w) => w.id === btn.dataset.portal);
+    const id = btn.dataset.portal;
+    // Повторний клік по вже вибраному відчиненому порталу — одразу на карту світу.
+    const world = WORLDS.find((w) => w.id === id);
     const status = Game.worldStatus(world);
-    UI.toast(UI.icon(status === "locked" ? "lock" : "hammer") + " <span><strong>" + UI.esc(world.name) + "</strong><br>" +
-      (status === "locked" ? "Портал відчиниться, коли пройдеш " + UI.esc(requirementText(world)) + "." : "Цей світ ще будується — портал відчиниться згодом.") + "</span>");
+    if (id === selectedWorld && (status === "open" || status === "done")) {
+      location.href = "index.html?world=" + id + "#map";
+      return;
+    }
+    selectedWorld = id;
+    renderHub();
+    const again = document.querySelector('#hub-labels [data-portal="' + id + '"]');
+    if (again) again.focus({ preventScroll: true });
   });
 
   $("#location-panel").addEventListener("click", (event) => {
@@ -832,12 +878,11 @@
     }
   });
 
-  // Легка анімація світу: вогнища, портали, блискавка (~3 кадри/с).
+  // Легка анімація світу: вогнища, блискавка (~3 кадри/с).
   // Працює, доки гравець не поставив анімацію на паузу.
   setInterval(() => {
     if (UI.motion() === "off") return;
     frame++;
     if (!$("#view-map").hidden) drawMap();
-    if (!$("#view-hub").hidden) drawHub();
   }, 350);
 })();

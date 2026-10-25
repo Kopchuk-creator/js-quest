@@ -121,7 +121,18 @@ code, pre, textarea, kbd, .text-input { font-variant-ligatures: none; font-featu
   content: ""; position: absolute; left: -8px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--yellow);
 }
 
-.sidebar-hero { margin-top: auto; position: relative; padding: 0 var(--s4); }
+/* Мандрівник унизу меню: ілюстрація героя і рівень. */
+.sidebar-hero { margin-top: auto; position: relative; }
+.sidebar-hero-art {
+  display: block; width: 100%; height: auto; pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 70%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 70%, transparent);
+}
+.sidebar-hero-info { position: relative; margin-top: -22px; padding: 0 var(--s5) var(--s5); display: grid; gap: 4px; }
+.sidebar-hero-info strong { font-size: 14px; font-weight: 800; }
+.sidebar-hero-info span { font-size: 13px; color: var(--text-muted); }
+.sidebar-hero-info .xp-bar { height: 8px; margin-top: 4px; }
+.sidebar-hero-info small { font-size: 12px; color: var(--text-dim); text-align: center; font-variant-numeric: tabular-nums; }
 .bubble {
   position: relative; border: 1px solid var(--border-strong); border-radius: var(--r);
   padding: var(--s2) var(--s3); font-size: 13px; color: var(--text-muted); background: var(--surface);
@@ -131,14 +142,6 @@ code, pre, textarea, kbd, .text-input { font-variant-ligatures: none; font-featu
   background: var(--surface); border-right: 1px solid var(--border-strong); border-bottom: 1px solid var(--border-strong);
   transform: rotate(45deg);
 }
-.sidebar-hero-art {
-  height: 150px; margin: var(--s2) calc(-1 * var(--s4)) 0; position: relative;
-  background:
-    linear-gradient(to top, #2f6b33 0 18px, #4a9a3c 18px 24px, transparent 24px),
-    radial-gradient(ellipse at 50% 100%, rgba(94, 224, 160, 0.08), transparent 70%);
-}
-.sidebar-hero-art canvas { position: absolute; left: 28px; bottom: 18px; width: 64px; height: 88px; animation: bob 1.6s steps(2) infinite; }
-
 @keyframes bob { 50% { transform: translateY(-3px); } }
 
 .main { flex: 1; min-width: 0; padding: var(--s6) var(--s6) var(--s8); outline: none; }
@@ -392,28 +395,71 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 
 /* ---------- світ-хаб ---------- */
 
-.hub-stage { aspect-ratio: 400 / 240; }
-.portal-label { text-decoration: none; }
-.portal-label .loc-name { font-size: 12px; padding: 4px 8px; max-width: 112px; white-space: normal; text-align: center; line-height: 1.25; }
-.portal-tech { font-size: 11px; font-weight: 700; color: var(--text-muted); background: rgba(17, 18, 19, 0.8); padding: 1px 8px; border-radius: 6px; }
-.portal-label.is-open .loc-name { border-color: var(--yellow); color: var(--yellow); }
-.portal-label.is-soon .loc-name, .portal-label.is-locked .loc-name { color: var(--text-muted); }
-.portal-label.is-soon { opacity: 0.8; }
+.hub-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 370px); gap: var(--s5); align-items: start; }
+.hub-main { display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
+.hub-head { display: flex; align-items: baseline; gap: var(--s5); flex-wrap: wrap; }
+.hub-head h1 { font-size: clamp(30px, 4vw, 52px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; }
+.hub-scene { padding: 0; overflow: hidden; }
+.hub-stage { position: relative; container-type: inline-size; }
+.hub-art { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
+.hub-portals { position: absolute; inset: 0; }
 
-.worlds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--s4); }
-.world-card { display: flex; gap: var(--s4); padding: var(--s4); align-items: flex-start; border-top: 3px solid var(--world); }
-.world-card.is-soon, .world-card.is-locked { border-top-color: var(--border-strong); }
-.world-portal { flex: none; width: 60px; }
-.world-portal canvas { width: 60px; height: 80px; }
-.world-card.is-soon .world-portal canvas, .world-card.is-locked .world-portal canvas { opacity: 0.7; }
-.world-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
-.world-info h3 { font-size: 18px; font-weight: 800; }
-.world-info p:not(.eyebrow) { color: var(--text-muted); font-size: 14px; }
-.world-info .btn { align-self: flex-start; margin-top: 4px; min-height: 40px; }
-.world-progress { display: flex; align-items: center; gap: var(--s3); font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.world-progress .xp-bar { flex: 1; height: 8px; }
-.world-progress .xp-bar span { background: var(--world); }
-.world-note { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+/* Портал = клікабельна арка з підписом унизу; підпис гри лягає поверх намальованого. */
+.portal-spot {
+  position: absolute; display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+  padding: 0; border: 0; background: none; cursor: pointer; border-radius: 18px;
+}
+.portal-spot::before {
+  content: ""; position: absolute; left: 12%; right: 12%; top: 0; bottom: 18%; border-radius: 50% 50% 10% 10% / 30% 30% 10% 10%;
+  box-shadow: 0 0 0 0 transparent; transition: box-shadow 0.25s var(--ease), background 0.25s;
+}
+.portal-spot:hover::before, .portal-spot.is-selected::before { background: radial-gradient(closest-side, rgba(247, 210, 58, 0.16), transparent); }
+.portal-label {
+  position: relative; display: grid; justify-items: center; gap: 0.15cqw; width: 100%; min-height: 5.8cqw; align-content: center;
+  padding: 0.6cqw 1cqw; border-radius: 1.1cqw; text-align: center;
+  background: rgba(20, 21, 23, 0.94); border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0.4cqw 1.2cqw rgba(0, 0, 0, 0.45); transition: transform 0.15s var(--ease), border-color 0.15s;
+}
+.portal-label strong { font-size: clamp(11px, 1.55cqw, 17px); font-weight: 800; line-height: 1.15; color: var(--text); }
+.portal-label small { font-size: clamp(9px, 1.2cqw, 13px); color: var(--text-muted); line-height: 1.2; }
+.portal-spot:hover .portal-label, .portal-spot:focus-visible .portal-label { transform: translateY(-2px); border-color: rgba(247, 210, 58, 0.6); }
+.portal-spot.is-selected .portal-label { border-color: var(--yellow); box-shadow: 0 0 0 0.35cqw rgba(247, 210, 58, 0.2), 0 0 1.6cqw rgba(247, 210, 58, 0.35); }
+.portal-spot.is-selected .portal-label strong { color: var(--yellow); }
+.portal-spot.is-soon .portal-label strong, .portal-spot.is-locked .portal-label strong { color: #d9dbe0; }
+.portal-spot:focus-visible { outline: none; }
+.portal-spot:focus-visible .portal-label { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.portal-badge { position: absolute; top: -0.9cqw; right: -0.9cqw; display: grid; place-items: center; width: 2.2cqw; height: 2.2cqw; min-width: 18px; min-height: 18px; border-radius: 50%; }
+.portal-badge.is-done { background: var(--mint); color: #0d2a1c; }
+.portal-badge .icon { width: 70%; height: 70%; stroke-width: 3; }
+
+.hub-side { display: flex; flex-direction: column; gap: var(--s4); }
+.world-panel { padding: var(--s6) var(--s5); display: flex; flex-direction: column; gap: var(--s4); }
+.world-panel .eyebrow { color: var(--yellow); text-transform: none; letter-spacing: 0; font-size: 14px; }
+.wp-title { font-size: clamp(26px, 2.4vw, 34px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; margin-top: calc(-1 * var(--s2)); }
+.wp-blurb { color: var(--text-muted); font-size: 15px; }
+.wp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); margin-top: var(--s2); }
+.wp-stat { display: flex; align-items: center; gap: var(--s3); font-size: 14px; font-weight: 600; }
+.wp-ic { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--border-strong); flex: none; }
+.wp-ic .icon { width: 20px; height: 20px; }
+.wp-progress-head { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; margin-bottom: var(--s2); font-variant-numeric: tabular-nums; }
+.wp-progress .xp-bar { height: 10px; }
+.xp-bar.is-mint span { background: var(--mint); }
+.wp-subtitle { font-size: 15px; font-weight: 800; margin-top: var(--s2); }
+.next-step {
+  display: flex; align-items: center; gap: var(--s3); padding-right: var(--s3); min-height: 72px; overflow: hidden;
+  border: 1px solid var(--border-strong); border-radius: var(--r); text-decoration: none; color: var(--text); font-weight: 800;
+  background: var(--surface-2, rgba(255, 255, 255, 0.03)); transition: border-color 0.15s;
+}
+.next-step:hover { border-color: var(--yellow); }
+.next-step img { width: 120px; height: 72px; object-fit: cover; flex: none; }
+.next-step-ph { display: grid; place-items: center; width: 72px; height: 72px; flex: none; color: var(--yellow); }
+.next-step span { flex: 1; min-width: 0; }
+.btn-block { width: 100%; justify-content: center; min-height: 54px; font-size: 17px; }
+.wp-link { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); color: var(--text-muted); text-decoration: none; font-weight: 600; font-size: 14px; padding: var(--s2); border-bottom: 1px solid var(--border); padding-bottom: var(--s4); }
+.wp-link:hover { color: var(--text); }
+.wp-note { display: flex; gap: var(--s2); align-items: flex-start; font-size: 14px; color: var(--text-muted); background: var(--surface-3); border-radius: var(--r); padding: var(--s3) var(--s4); }
+.wp-note .icon { flex: none; margin-top: 2px; color: var(--yellow); }
+.wp-note.is-done .icon { color: var(--mint); }
 .section-sub { font-size: 14px; font-weight: 600; color: var(--text-dim); }
 
 /* ---------- екран локації ---------- */
@@ -796,7 +842,8 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
 }
 
 @media (max-width: 1100px) {
-  .map-layout, .topbar { grid-template-columns: minmax(0, 1fr); }
+  .map-layout, .topbar, .hub-layout { grid-template-columns: minmax(0, 1fr); }
+  .hub-side { flex-direction: column-reverse; }
   .inventory { flex-wrap: wrap; }
   .inventory-intro { width: auto; border-right: 0; padding-right: 0; }
   .parchment { width: auto; }
@@ -818,6 +865,9 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
   .main { padding: var(--s4) var(--s4) 96px; }
   .topbar-title { gap: var(--s2); }
   .map-stage { min-width: 720px; }
+  /* На вузькому екрані зала порталів прокручується вбік, щоб підписи лишались читабельними. */
+  .hub-scene { overflow-x: auto; }
+  .hub-stage { min-width: 640px; }
   .location-panel { position: fixed; left: var(--s3); right: var(--s3); bottom: 84px; width: auto; max-height: 60vh; }
   .inventory { padding: var(--s4); gap: var(--s4); }
   .slot { width: 64px; height: 64px; }

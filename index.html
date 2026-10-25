@@ -20,23 +20,25 @@
     <main class="main" id="main" tabindex="-1">
       <!-- Світ-хаб -->
       <section class="view" id="view-hub" aria-labelledby="hub-title" hidden>
-        <header class="topbar">
-          <div class="topbar-title">
-            <h1 id="hub-title">Світи пригод</h1>
-            <p class="subtitle">Кожен портал веде у світ однієї технології.<br>Пройди їх усі — і станеш full-stack розробником.</p>
+        <div class="hub-layout">
+          <div class="hub-main">
+            <header class="hub-head">
+              <h1 id="hub-title">Обери свій світ</h1>
+              <p class="subtitle" id="hub-count"></p>
+            </header>
+            <section class="card hub-scene" aria-label="Зала порталів">
+              <div class="hub-stage" id="hub-stage">
+                <img class="hub-art" src="assets/maps/hub.webp" width="982" height="914"
+                  alt="Зала порталів: одинадцять арок на терасах, кожна веде у світ однієї технології">
+                <div class="hub-portals" id="hub-labels" role="group" aria-label="Портали у світи"></div>
+              </div>
+            </section>
           </div>
-          <div class="xp-card js-xp"></div>
-        </header>
-        <section class="card map-card hub-card" aria-label="Світ-хаб з порталами">
-          <div class="map-scroll">
-            <div class="map-stage hub-stage">
-              <canvas class="pixel map-canvas" id="hub-canvas" role="img" aria-label="Летючий острів з порталами у світи"></canvas>
-              <div class="map-labels" id="hub-labels"></div>
-            </div>
-          </div>
-        </section>
-        <h2 class="section-title">Усі світи</h2>
-        <div class="worlds-grid" id="worlds-grid"></div>
+          <aside class="hub-side">
+            <div class="xp-card js-xp"></div>
+            <section class="card world-panel" id="world-panel" aria-live="polite" aria-label="Вибраний світ"></section>
+          </aside>
+        </div>
       </section>
 
       <!-- Карта -->
@@ -158,7 +160,6 @@
   <script src="js/game.js"></script>
   <script src="js/art.js"></script>
   <script src="js/art-web.js"></script>
-  <script src="js/art-hub.js"></script>
   <script src="js/map3d.js"></script>
   <script src="js/locations-art.js"></script>
   <script src="js/ui.js"></script>

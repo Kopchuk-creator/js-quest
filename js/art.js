@@ -1125,7 +1125,7 @@
     landmark,
     renderMap,
     renderScene,
-    // Інструменти для файлів з артом інших світів (art-web.js, art-hub.js).
+    // Інструменти для файлів з артом інших світів (наприклад, art-web.js).
     kit: {
       makeCanvas, painter, gridSprite, dimmed, hash, smoothNoise, fbm, hexToRgb, lerpColor, distToPolyline,
       C, PINE, PINE_LIGHT, BUSH, bigPine, drawFire, drawTorch, drawFlag, ITEM_PALETTE, SCENE_W, SCENE_H,

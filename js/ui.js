@@ -27,6 +27,10 @@
     book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15Z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20v3H6.5"/>',
     flame: '<path d="M12 21c-4 0-6.5-2.6-6.5-6.2 0-3.4 2.6-5.4 3.6-8.3.6 1.7 1.7 2.7 2.7 3.1C12 6.9 13 4.6 14.6 3c.4 3 4 5.4 4 10.6 0 4-2.8 7.4-6.6 7.4Z"/>',
     arrowLeft: '<path d="M19 12H5m6-6-6 6 6 6"/>',
+    arrowRight: '<path d="M5 12h14m-6-6 6 6-6 6"/>',
+    flag: '<path d="M5 21V4m0 0h11l-2 4 2 4H5"/>',
+    pin: '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3Z"/>',
     compass: '<circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"/>',
     search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
     copy: '<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5V5.5a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"/>',
@@ -176,7 +180,7 @@
     const current = Game.currentLevelId(progress) || Game.LEVELS.length;
     const worldQuery = "index.html?world=" + Game.WORLD_ID;
     const items = [
-      { id: "hub", label: "Світи", icon: "portal", href: root + "index.html#hub" },
+      { id: "hub", label: "Світи", icon: "globe", href: root + "index.html#hub" },
       { id: "map", label: "Карта", icon: "map", href: root + worldQuery + "#map" },
       { id: "practice", label: "Практика", icon: "code", href: Game.levelUrl(current, root) },
       { id: "projects", label: "Проєкти", icon: "projects", href: root + worldQuery + "#projects" },
@@ -192,9 +196,25 @@
         (it.id === active ? ' aria-current="page"' : "") + ">" + icon(it.icon) + "<span>" + it.label + "</span></a></li>"
       ).join("") +
       "</ul></nav>" +
-      '<div class="sidebar-hero"><p class="bubble">Більше знань чекає попереду!</p><div class="sidebar-hero-art"></div></div>';
-    const art = container.querySelector(".sidebar-hero-art");
-    Art.mount(art, Art.hero(), "Герой");
+      sidebarHeroHtml(root);
+  }
+
+  // Мандрівник унизу меню: ілюстрація героя і його рівень (досвід усіх світів).
+  function sidebarHeroHtml(root) {
+    const hero = Game.heroLevel(Game.totalXpAll());
+    const pct = Math.round((hero.current / hero.needed) * 100);
+    return '<div class="sidebar-hero">' +
+      '<img class="sidebar-hero-art" src="' + root + 'assets/art/hero.webp" width="205" height="195" alt="">' +
+      '<div class="sidebar-hero-info"><strong>Мандрівник</strong><span>Рівень ' + hero.level + "</span>" +
+      '<div class="xp-bar" role="progressbar" aria-label="Досвід до наступного рівня" aria-valuemin="0" aria-valuemax="' + hero.needed +
+      '" aria-valuenow="' + hero.current + '"><span style="width:' + pct + '%"></span></div>' +
+      "<small>" + hero.current + " / " + hero.needed + " XP</small></div></div>";
+  }
+
+  // Оновлює рівень мандрівника (наприклад, після пройденої місії).
+  function refreshSidebarHero(container, root) {
+    const old = container && container.querySelector(".sidebar-hero");
+    if (old) old.outerHTML = sidebarHeroHtml(root || "");
   }
 
   function setActiveNav(container, active) {
@@ -244,5 +264,5 @@
 
   document.documentElement.classList.toggle("motion-off", motion() === "off");
 
-  window.UI = { icon, esc, md, highlight, guessLang, renderSidebar, setActiveNav, toast, motion, setMotion };
+  window.UI = { icon, esc, md, highlight, guessLang, renderSidebar, refreshSidebarHero, setActiveNav, toast, motion, setMotion };
 })();
