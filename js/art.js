@@ -710,8 +710,22 @@
     } },
   };
 
-  function landmark(locId, progress, frame, dim) {
-    const def = LANDMARKS[locId];
+  /* ---------- реєстр світів ----------
+     Кожен світ описує власну карту: розмір, рельєф (buildTerrain),
+     орієнтири локацій, біоми сцен і де стоять підписи та герой. */
+
+  const WORLD_ART = {};
+
+  function registerWorld(id, cfg) {
+    WORLD_ART[id] = Object.assign({ mapW: 400, mapH: 250, labelPos: {}, landmarkDy: {}, heroSpot: {}, pathDy: {} }, cfg);
+  }
+
+  function worldArt(id) {
+    return WORLD_ART[id] || WORLD_ART.js;
+  }
+
+  function landmark(locId, progress, frame, dim, worldId) {
+    const def = worldArt(worldId).landmarks[locId];
     const c = makeCanvas(def.w, def.h);
     def.draw(painter(c), Math.max(0, Math.min(1, progress)), frame || 0);
     return dim ? dimmed(c, 0.55) : c;
@@ -751,8 +765,6 @@
     const base = x < 222 ? 46 : 26;
     return base + smoothNoise(x / 14, 1, 9) * 10;
   }
-
-  let terrainCache = null;
 
   function buildTerrain() {
     const c = makeCanvas(MAP_W, MAP_H);
@@ -859,20 +871,22 @@
   /**
    * Малює карту. states[locId] = { progress: 0..1, locked: bool }
    */
-  function renderMap(canvas, states, frame) {
-    canvas.width = MAP_W;
-    canvas.height = MAP_H;
-    if (!terrainCache) terrainCache = buildTerrain();
+  function renderMap(canvas, states, frame, worldId) {
+    const w = worldArt(worldId);
+    canvas.width = w.mapW;
+    canvas.height = w.mapH;
+    if (!w.terrainCache) w.terrainCache = w.buildTerrain();
     const g = painter(canvas);
-    g.ctx.drawImage(terrainCache, 0, 0);
-    const order = Object.keys(MAP_POINTS).map(Number).sort((a, b) => MAP_POINTS[a][1] - MAP_POINTS[b][1]);
+    g.ctx.drawImage(w.terrainCache, 0, 0);
+    const order = Object.keys(w.points).map(Number).sort((a, b) => w.points[a][1] - w.points[b][1]);
     order.forEach((id) => {
       const st = states[id] || { progress: 0, locked: true };
-      const spr = landmark(id, st.progress, frame, st.locked);
-      const [x, y] = MAP_POINTS[id];
-      // Хмара «Вершини» висить трохи вище, щоб не накривати героя на даху вежі.
-      g.sprite(spr, x - Math.floor(spr.width / 2), y - spr.height + (id === 10 ? -10 : 2));
+      const spr = landmark(id, st.progress, frame, st.locked, worldId);
+      const [x, y] = w.points[id];
+      const dy = w.landmarkDy[id] !== undefined ? w.landmarkDy[id] : 2;
+      g.sprite(spr, x - Math.floor(spr.width / 2), y - spr.height + dy);
     });
+    if (w.overlay) w.overlay(painter(canvas), states, frame);
   }
 
   /* ---------- сцени місій ---------- */
@@ -889,7 +903,16 @@
     7:  { sky: ["#7fc3ec", "#d6eef9"], far: "#6d8a9e", ground: ["#4f9a3a", "#5aa843"], hills: "chasm" },
     8:  { sky: ["#2a2018", "#4a3a2a"], far: "#3a2e24", ground: ["#5a4632", "#6b543c"], hills: "vault" },
     9:  { sky: ["#6aaee0", "#cfe8f7"], far: "#2a85c4", ground: ["#4f9a3a", "#5aa843"], hills: "sea" },
-    10: { sky: ["#3c4250", "#6a7080"], far: "#4a5060", ground: ["#8a8f96", "#a9adb3"], hills: "roof" },
+    10: {
+      sky: ["#3c4250", "#6a7080"], solvedSky: ["#7fc3ec", "#e2f2fa"], cloud: "#4a505e", solvedCloud: "#ffffff",
+      far: "#4a5060", ground: ["#8a8f96", "#a9adb3"], hills: "roof", landmarkY: 70,
+      // На вершині вежі під хмарою видно дах вежі.
+      before(g, dy) {
+        g.r(84, 92 + dy, 80, 36, "#6d737c");
+        for (let x = 84; x < 164; x += 8) g.r(x, 86 + dy, 5, 6, "#6d737c");
+        g.r(84, 92 + dy, 80, 2, "#9aa1a9");
+      },
+    },
     11: { sky: ["#f2a65a", "#fde2a8"], far: "#7a9a5a", ground: ["#4f9a3a", "#67b64b"], hills: "hills" },
   };
 
@@ -898,16 +921,15 @@
     return "rgb(" + A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(",") + ")";
   }
 
-  function drawBackdrop(g, locId, solvedAll, H) {
-    const biome = BIOMES[locId];
-    let sky = biome.sky;
-    if (locId === 10 && solvedAll) sky = ["#7fc3ec", "#e2f2fa"];
+  function drawBackdrop(g, biome, seedBase, solvedAll, H) {
+    const sky = solvedAll && biome.solvedSky ? biome.solvedSky : biome.sky;
     const bands = 8;
     const horizon = H - 36;
     for (let i = 0; i < bands; i++) {
       g.r(0, Math.floor((i * horizon) / bands), SCENE_W, Math.ceil(horizon / bands) + 1, lerpColor(sky[0], sky[1], i / (bands - 1)));
     }
-    const seed = locId * 13;
+    const seed = seedBase * 13;
+    if (biome.drawFar) biome.drawFar(g, horizon, H, seed);
     switch (biome.hills) {
       case "trees":
       case "deadtrees":
@@ -949,8 +971,8 @@
         break;
     }
     // Хмаринки в небі (крім печер і скарбниці).
-    if (!["stalactites", "vault"].includes(biome.hills)) {
-      const cloud = locId === 10 && !solvedAll ? "#4a505e" : "#ffffff";
+    if (!["stalactites", "vault"].includes(biome.hills) && !biome.noClouds) {
+      const cloud = (solvedAll ? biome.solvedCloud : biome.cloud) || "#ffffff";
       g.ellipse(36, 16, 12, 4, cloud);
       g.ellipse(150, 24, 16, 5, cloud);
     }
@@ -959,6 +981,7 @@
     for (let i = 0; i < 160; i++) {
       g.p(hash(i, 10, seed) * SCENE_W, horizon + hash(i, 11, seed) * (H - horizon), biome.ground[1]);
     }
+    if (biome.drawGround) biome.drawGround(g, horizon, H, seed);
     if (biome.hills === "chasm") {
       g.r(96, horizon, 52, H - horizon, "#1c2430");
       g.r(96, horizon, 2, H - horizon, "#11161e");
@@ -979,17 +1002,13 @@
     const dy = H - SCENE_H;
     canvas.height = H;
     const g = painter(canvas);
-    drawBackdrop(g, locId, progress >= 1, H);
-    const lm = landmark(locId, progress, o.frame || 0, false);
+    const biome = worldArt(o.world).biomes[locId];
+    drawBackdrop(g, biome, locId, progress >= 1, H);
+    const lm = landmark(locId, progress, o.frame || 0, false, o.world);
     const scale = Math.max(1, Math.min(3, Math.floor(104 / lm.height), Math.floor(118 / lm.width)));
     const lx = 124 - (lm.width * scale) / 2;
-    const ly = (locId === 10 ? 70 : 104) + dy - lm.height * scale;
-    if (locId === 10) {
-      // На вершині вежі під хмарою видно дах вежі.
-      g.r(84, 92 + dy, 80, 36, "#6d737c");
-      for (let x = 84; x < 164; x += 8) g.r(x, 86 + dy, 5, 6, "#6d737c");
-      g.r(84, 92 + dy, 80, 2, "#9aa1a9");
-    }
+    const ly = (biome.landmarkY || 104) + dy - lm.height * scale;
+    if (biome.before) biome.before(g, dy);
     g.sprite(lm, lx, ly, scale);
     if (o.hero !== false) {
       const hero = Art.hero();
@@ -1008,18 +1027,38 @@
     }
   }
 
+  registerWorld("js", {
+    mapW: MAP_W,
+    mapH: MAP_H,
+    points: MAP_POINTS,
+    buildTerrain,
+    landmarks: LANDMARKS,
+    biomes: BIOMES,
+    // Хмара «Вершини» висить вище, щоб не накривати героя на даху вежі.
+    landmarkDy: { 10: -10 },
+    labelPos: { 8: { dx: 0, dy: 4 }, 10: { dx: -14, dy: 8, align: "right" } },
+    // На «Вершині вежі» герой стоїть прямо на даху вежі.
+    heroSpot: { 10: { dx: -8, dy: 14 } },
+    pathDy: { 10: -6 },
+  });
+
   /* ---------- публічний API ---------- */
 
   const Art = {
-    MAP_W,
-    MAP_H,
-    MAP_POINTS,
     hero: () => cached("hero", () => gridSprite(HERO_ROWS, HERO_PALETTE)),
     mentor: () => cached("mentor", () => gridSprite(MENTOR_ROWS, MENTOR_PALETTE)),
     item: (name) => cached("item:" + name, () => gridSprite(ITEMS[name], ITEM_PALETTE)),
+    addItems(items) { Object.assign(ITEMS, items); },
+    registerWorld,
+    world: worldArt,
     landmark,
     renderMap,
     renderScene,
+    // Інструменти для файлів з артом інших світів (art-web.js, art-hub.js).
+    kit: {
+      makeCanvas, painter, gridSprite, dimmed, hash, smoothNoise, fbm, hexToRgb, lerpColor, distToPolyline,
+      C, PINE, PINE_LIGHT, BUSH, bigPine, drawFire, drawTorch, drawFlag, ITEM_PALETTE, SCENE_W, SCENE_H,
+    },
     // Вставляє спрайт у звичайний <canvas> елемент сторінки.
     mount(target, sprite, title) {
       const c = makeCanvas(sprite.width, sprite.height);

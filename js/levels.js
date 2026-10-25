@@ -4662,3 +4662,12 @@ async function loadQuests() {
     difficulty: 3,
   },
 ];
+
+// Реєстрація світу JavaScript у загальному реєстрі світів (див. worlds.js).
+window.WORLD_DATA = window.WORLD_DATA || {};
+window.WORLD_DATA.js = {
+  locations: window.LOCATIONS,
+  levels: window.LEVELS,
+  // Великі практичні місії для розділу «Проєкти».
+  projects: [61, 68, 75, 79, 96],
+};

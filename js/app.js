@@ -1,6 +1,10 @@
 /* =========================================================
-   app.js — Екран 1: карта світу, а також розділи
-   «Проєкти» (журнал локацій) і «Трофеї» (профіль героя).
+   app.js — головна сторінка:
+     #hub       — світ-хаб із порталами в усі світи
+     #map       — карта поточного світу (?world=…)
+     #projects  — великі практичні місії й журнал локацій світу
+     #handbook  — довідник героя
+     #trophies  — профіль героя з прогресом по всіх світах
    Перемикання розділів — через #hash, без перезавантаження.
    ========================================================= */
 (function () {
@@ -8,23 +12,16 @@
 
   const { LEVELS, LOCATIONS } = Game;
   const $ = (sel) => document.querySelector(sel);
+  const worldArt = Art.world(Game.WORLD_ID);
 
-  // Де стоїть підпис локації відносно опорної точки (у пікселях карти)
-  // і з якого боку від точки він вирівнюється.
-  const LABEL_POS = {
-    1: { dx: 0, dy: 6 }, 2: { dx: 0, dy: 6 }, 3: { dx: 0, dy: 6 }, 4: { dx: 0, dy: 6 },
-    5: { dx: 0, dy: 6 }, 6: { dx: 0, dy: 6 }, 7: { dx: 0, dy: 6 }, 8: { dx: 0, dy: 4 },
-    9: { dx: 0, dy: 6 }, 10: { dx: -14, dy: 8, align: "right" }, 11: { dx: 0, dy: 6 },
-  };
-
-  let progress = GameStore.load();
+  let progress = Game.load();
   let frame = 0;
   let selectedLocation = null;
 
   /* ---------- допоміжне ---------- */
 
   function levelUrl(id) {
-    return "levels/level.html?id=" + id;
+    return Game.levelUrl(id, "");
   }
 
   function locStates() {
@@ -36,18 +33,86 @@
     return states;
   }
 
-  /* ---------- шкала досвіду ---------- */
+  function toRoman(n) {
+    return ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI"][n] || String(n);
+  }
+
+  /* ---------- шкала досвіду (спільна для всіх світів) ---------- */
 
   function renderXp() {
-    const hero = Game.heroLevel(progress.xp);
+    const hero = Game.heroLevel(Game.totalXpAll());
     const pct = Math.round((hero.current / hero.needed) * 100);
-    $("#xp-card").innerHTML =
+    const html =
       '<div class="xp-head"><strong>Рівень ' + hero.level + '</strong><span>' + hero.current + " / " + hero.needed + " XP</span></div>" +
       '<div class="xp-bar" role="progressbar" aria-label="Досвід до наступного рівня" aria-valuemin="0" aria-valuemax="' + hero.needed +
       '" aria-valuenow="' + hero.current + '"><span style="width:' + pct + '%"></span></div>';
+    document.querySelectorAll(".js-xp").forEach((el) => { el.innerHTML = html; });
   }
 
-  /* ---------- карта ---------- */
+  /* =========================================================
+     Світ-хаб
+     ========================================================= */
+
+  const HUB_STATUS_TEXT = { open: "Портал відчинено", done: "Світ пройдено", locked: "Портал запечатано", soon: "Світ будується" };
+
+  function portalStates() {
+    return WORLDS.map((w) => {
+      const status = Game.worldStatus(w);
+      const api = status === "soon" ? null : Game.forWorld(w.id);
+      return { world: w, status, completion: api ? api.completion() : null };
+    });
+  }
+
+  function requirementText(world) {
+    return world.requires.map((id) => "«" + WORLDS.find((w) => w.id === id).name + "»").join(" і ");
+  }
+
+  function renderHub() {
+    const states = portalStates();
+    Art.renderHub($("#hub-canvas"), states, frame);
+    const W = Art.HUB_W, H = Art.HUB_H;
+    $("#hub-labels").innerHTML = states.map((s, i) => {
+      const [x, y] = Art.HUB_POINTS[i];
+      const style = 'style="left:' + (x / W) * 100 + "%;top:" + ((y + 4) / H) * 100 + '%"';
+      const inner = '<span class="loc-name">' + (s.status === "done" ? '<span class="loc-icon is-done">' + UI.icon("check") + "</span>" : "") +
+        UI.esc(s.world.name) + "</span>" + '<span class="portal-tech">' + UI.esc(s.world.tech) + "</span>";
+      if (s.status === "open" || s.status === "done") {
+        return '<a class="loc-label portal-label is-' + s.status + '" ' + style + ' href="index.html?world=' + s.world.id + '#map">' + inner + "</a>";
+      }
+      return '<button type="button" class="loc-label portal-label is-' + s.status + '" ' + style + ' data-portal="' + s.world.id + '" aria-label="' +
+        UI.esc(s.world.name + ": " + HUB_STATUS_TEXT[s.status]) + '">' + (s.status === "locked" ? '<span class="loc-lock">' + UI.icon("lock") + "</span>" : "") + inner + "</button>";
+    }).join("");
+
+    $("#worlds-grid").innerHTML = states.map((s) => {
+      const c = s.completion;
+      const pct = c ? Math.round(c.ratio * 100) : 0;
+      const action = s.status === "open" || s.status === "done"
+        ? '<a class="btn btn-primary" href="index.html?world=' + s.world.id + '#map">' + UI.icon("portal") + (c && c.done ? "Продовжити" : "Увійти") + "</a>"
+        : '<span class="world-note">' + UI.icon(s.status === "locked" ? "lock" : "hammer") +
+          (s.status === "locked" ? "Спершу пройди " + UI.esc(requirementText(s.world)) : "Світ ще будується — скоро відкриється") + "</span>";
+      return (
+        '<article class="card world-card is-' + s.status + '" style="--world:' + s.world.color + '">' +
+        '<div class="world-portal" data-portal-art="' + s.world.id + '"></div>' +
+        '<div class="world-info"><p class="eyebrow">' + UI.esc(s.world.tech) + "</p><h3>" + UI.esc(s.world.name) + "</h3>" +
+        "<p>" + UI.esc(s.world.blurb) + "</p>" +
+        (c ? '<div class="world-progress"><div class="xp-bar" role="progressbar" aria-label="Пройдено місій" aria-valuemin="0" aria-valuemax="' + c.total +
+          '" aria-valuenow="' + c.done + '"><span style="width:' + pct + '%"></span></div><span>' + c.done + " / " + c.total + "</span></div>" : "") +
+        action + "</div></article>"
+      );
+    }).join("");
+    document.querySelectorAll("[data-portal-art]").forEach((el) => {
+      const s = states.find((st) => st.world.id === el.dataset.portalArt);
+      Art.mount(el, Art.portal(s.world.color, s.status, 0));
+    });
+  }
+
+  function drawHub() {
+    Art.renderHub($("#hub-canvas"), portalStates(), frame);
+  }
+
+  /* =========================================================
+     Карта світу
+     ========================================================= */
 
   function segmentPath(points, i) {
     const p0 = points[Math.max(0, i - 1)], p1 = points[i], p2 = points[i + 1], p3 = points[Math.min(points.length - 1, i + 2)];
@@ -59,8 +124,9 @@
   function renderPath(states) {
     // Стежка проходить трохи нижче опорних точок — по землі перед орієнтирами.
     const points = LOCATIONS.map((loc) => {
-      const [x, y] = Art.MAP_POINTS[loc.id];
-      return [x, loc.id === 10 ? y - 6 : y + 1];
+      const [x, y] = worldArt.points[loc.id];
+      const dy = worldArt.pathDy[loc.id];
+      return [x, y + (dy !== undefined ? dy : 1)];
     });
     let html = "";
     for (let i = 0; i < points.length - 1; i++) {
@@ -69,16 +135,18 @@
       const cls = from === "done" && to === "done" ? "is-done" : from === "done" ? "is-next" : "is-locked";
       html += '<path class="trail ' + cls + '" d="' + segmentPath(points, i) + '"/>';
     }
-    $("#map-path").innerHTML = html;
+    const svg = $("#map-path");
+    svg.setAttribute("viewBox", "0 0 " + worldArt.mapW + " " + worldArt.mapH);
+    svg.innerHTML = html;
   }
 
   function renderLabels(states) {
     const html = LOCATIONS.map((loc) => {
       const st = states[loc.id];
-      const [x, y] = Art.MAP_POINTS[loc.id];
-      const pos = LABEL_POS[loc.id];
-      const left = ((x + pos.dx) / Art.MAP_W) * 100;
-      const top = ((y + pos.dy) / Art.MAP_H) * 100;
+      const [x, y] = worldArt.points[loc.id];
+      const pos = Object.assign({ dx: 0, dy: 6 }, worldArt.labelPos[loc.id]);
+      const left = ((x + pos.dx) / worldArt.mapW) * 100;
+      const top = ((y + pos.dy) / worldArt.mapH) * 100;
       const lp = Game.locationProgress(progress, loc);
       const statusText = st.status === "done" ? "відновлено" : st.status === "current" ? "ти тут, пройдено " + lp.done + " з " + lp.total : "заблоковано";
       const iconHtml = st.status === "done" ? '<span class="loc-icon is-done">' + UI.icon("check") + "</span>"
@@ -99,24 +167,27 @@
 
   function placeHero(states) {
     const current = LOCATIONS.find((loc) => states[loc.id].status === "current") || LOCATIONS[LOCATIONS.length - 1];
-    const [x, y] = Art.MAP_POINTS[current.id];
+    const [x, y] = worldArt.points[current.id];
     const heroEl = $("#map-hero");
     if (!heroEl.firstChild) Art.mount(heroEl, Art.hero());
-    // На «Вершині вежі» герой стоїть прямо на даху вежі.
-    const offsetX = current.id === 10 ? -8 : -24;
-    const baseY = current.id === 10 ? y + 14 : y + 2;
-    heroEl.style.left = ((x + offsetX) / Art.MAP_W) * 100 + "%";
-    heroEl.style.top = ((baseY - 22) / Art.MAP_H) * 100 + "%";
+    const spot = Object.assign({ dx: -24, dy: 2 }, worldArt.heroSpot[current.id]);
+    heroEl.style.left = ((x + spot.dx) / worldArt.mapW) * 100 + "%";
+    heroEl.style.top = ((y + spot.dy - 22) / worldArt.mapH) * 100 + "%";
+    heroEl.style.width = (16 / worldArt.mapW) * 115 + "%";
     return current;
   }
 
   function drawMap() {
     const states = locStates();
-    Art.renderMap($("#map-canvas"), states, frame);
+    Art.renderMap($("#map-canvas"), states, frame, Game.WORLD_ID);
     return states;
   }
 
   function renderMap() {
+    $("#map-stage").style.aspectRatio = worldArt.mapW + " / " + worldArt.mapH;
+    $("#map-title").textContent = Game.meta.name;
+    $("#map-subtitle").innerHTML = UI.esc(Game.meta.tech) + ". Виконуй місії.<br>Відновлюй цей світ.";
+    $("#map-canvas").setAttribute("aria-label", "Піксельна карта світу «" + Game.meta.name + "»");
     const states = drawMap();
     renderPath(states);
     renderLabels(states);
@@ -124,12 +195,26 @@
     // На вузьких екранах карта прокручується — показуємо поточну локацію.
     const scroller = $("#map-scroll");
     if (scroller.scrollWidth > scroller.clientWidth) {
-      const [x] = Art.MAP_POINTS[current.id];
-      scroller.scrollLeft = (x / Art.MAP_W) * scroller.scrollWidth - scroller.clientWidth / 2;
+      const [x] = worldArt.points[current.id];
+      scroller.scrollLeft = (x / worldArt.mapW) * scroller.scrollWidth - scroller.clientWidth / 2;
     }
   }
 
   /* ---------- панель локації (список рівнів) ---------- */
+
+  function levelRow(id, numberLabel) {
+    const level = Game.getLevel(id);
+    const st = Game.levelStatus(progress, id);
+    const badge = st === "done" ? UI.icon("check") : st === "available" ? UI.icon("play") : UI.icon("lock");
+    const inner =
+      '<span class="lv-badge is-' + st + '">' + badge + "</span>" +
+      '<span class="lv-num">' + numberLabel + "</span>" +
+      '<span class="lv-title">' + UI.esc(level.title) + "<small>" + Game.TASK_LABELS[level.taskType] + "</small></span>" +
+      '<span class="lv-xp">+' + Game.xpFor(level) + " XP</span>";
+    return st === "locked"
+      ? '<li><span class="lv-row is-locked" aria-disabled="true">' + inner + "</span></li>"
+      : '<li><a class="lv-row is-' + st + '" href="' + levelUrl(id) + '">' + inner + "</a></li>";
+  }
 
   function renderLocationPanel(locId) {
     const panel = $("#location-panel");
@@ -140,26 +225,13 @@
     const loc = LOCATIONS.find((l) => l.id === locId);
     const status = Game.locationStatus(progress, loc);
     const lp = Game.locationProgress(progress, loc);
-    const rows = loc.levels.map((id, index) => {
-      const level = Game.getLevel(id);
-      const st = Game.levelStatus(progress, id);
-      const badge = st === "done" ? UI.icon("check") : st === "available" ? UI.icon("play") : UI.icon("lock");
-      const inner =
-        '<span class="lv-badge is-' + st + '">' + badge + "</span>" +
-        '<span class="lv-num">' + (index + 1) + "</span>" +
-        '<span class="lv-title">' + UI.esc(level.title) + '<small>' + Game.TASK_LABELS[level.taskType] + "</small></span>" +
-        '<span class="lv-xp">+' + Game.xpFor(level) + " XP</span>";
-      return st === "locked"
-        ? '<li><span class="lv-row is-locked" aria-disabled="true">' + inner + "</span></li>"
-        : '<li><a class="lv-row is-' + st + '" href="' + levelUrl(id) + '">' + inner + "</a></li>";
-    }).join("");
     panel.innerHTML =
       '<div class="panel-head"><div><p class="eyebrow">' + (status === "done" ? "Відновлено" : status === "current" ? "Поточна локація" : "Ще за туманом") +
       " · " + lp.done + " / " + lp.total + '</p><h2 id="panel-title">' + UI.esc(loc.name) + "</h2>" +
       '<p class="panel-event">' + (status === "done" ? UI.icon("check") + " " : "") + UI.esc(loc.event) + "</p></div>" +
       '<button type="button" class="icon-btn" data-close-panel aria-label="Закрити список місій">' + UI.icon("close") + "</button></div>" +
       (status === "locked" ? '<p class="panel-note">' + UI.icon("lock") + " Пройди попередню локацію, щоб відкрити шлях сюди.</p>" : "") +
-      '<ol class="lv-list">' + rows + "</ol>";
+      '<ol class="lv-list">' + loc.levels.map((id, index) => levelRow(id, index + 1)).join("") + "</ol>";
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-labelledby", "panel-title");
     panel.hidden = false;
@@ -181,12 +253,13 @@
     const currentId = Game.currentLevelId(progress);
     clearInterval(sceneTimer);
     if (!currentId) {
+      const last = LOCATIONS[LOCATIONS.length - 1];
       card.innerHTML =
-        '<p class="eyebrow">Усі 96 місій пройдено</p><h2 id="mission-title">Королівство врятоване!</h2>' +
-        '<p class="mission-story">Замок відбудовано, баги приборкано. Можеш повертатися до будь-якої місії, щоб повторити теми.</p>' +
+        '<p class="eyebrow">Усі ' + LEVELS.length + ' місій пройдено</p><h2 id="mission-title">Світ відновлено!</h2>' +
+        '<p class="mission-story">' + UI.esc(last.event) + ". Можеш повертатися до будь-якої місії або вирушати порталом в інший світ.</p>" +
         '<div class="scene-frame"><canvas class="pixel scene-canvas" id="card-scene"></canvas></div>' +
-        '<a class="btn btn-primary btn-lg" href="index.html#projects">' + UI.icon("book") + "Журнал місій</a>";
-      Art.renderScene($("#card-scene"), 11, 1, { frame });
+        '<a class="btn btn-primary btn-lg" href="index.html#hub">' + UI.icon("portal") + "До порталів</a>";
+      Art.renderScene($("#card-scene"), last.id, 1, { frame, world: Game.WORLD_ID });
       return;
     }
     const level = Game.getLevel(currentId);
@@ -204,7 +277,7 @@
       '<div><dt class="visually-hidden">Тип</dt><dd class="task-type">' + Game.TASK_LABELS[level.taskType] + "</dd></div>" +
       "</dl>" +
       '<a class="btn btn-primary btn-lg" href="' + levelUrl(currentId) + '">' + UI.icon("play") + "Почати місію</a>";
-    const draw = () => Art.renderScene($("#card-scene"), loc.id, before, { frame });
+    const draw = () => Art.renderScene($("#card-scene"), loc.id, before, { frame, world: Game.WORLD_ID });
     draw();
     sceneTimer = setInterval(draw, 450);
   }
@@ -223,20 +296,21 @@
     list.querySelectorAll("[data-item]").forEach((slot) => Art.mount(slot, Art.item(slot.dataset.item)));
   }
 
-  /* ---------- проєкти й журнал ---------- */
-
-  const PROJECT_IDS = [61, 68, 75, 79, 96];
+  /* =========================================================
+     Проєкти й журнал локацій світу
+     ========================================================= */
 
   function renderProjects() {
-    $("#projects-grid").innerHTML = PROJECT_IDS.map((id) => {
+    $("#projects-title").textContent = "Проєкти: " + Game.meta.name;
+    $("#projects-grid").innerHTML = Game.projects.map((id) => {
       const level = Game.getLevel(id);
       const st = Game.levelStatus(progress, id);
       const loc = Game.locationOf(level);
       const label = st === "done" ? "Виконано" : st === "available" ? "Доступно" : "Заблоковано";
       const body =
         '<span class="project-status is-' + st + '">' + UI.icon(st === "done" ? "check" : st === "available" ? "play" : "lock") + label + "</span>" +
-        '<h3>' + UI.esc(level.title) + "</h3>" +
-        '<p>' + UI.md(level.missionStory) + "</p>" +
+        "<h3>" + UI.esc(level.title) + "</h3>" +
+        "<p>" + UI.md(level.missionStory) + "</p>" +
         '<span class="project-meta">' + UI.esc(loc.name) + " · Рівень " + id + " · +" + Game.xpFor(level) + " XP</span>";
       return st === "locked"
         ? '<article class="card project is-locked" aria-disabled="true">' + body + "</article>"
@@ -246,15 +320,6 @@
     $("#journal").innerHTML = LOCATIONS.map((loc) => {
       const st = Game.locationStatus(progress, loc);
       const lp = Game.locationProgress(progress, loc);
-      const rows = loc.levels.map((id) => {
-        const level = Game.getLevel(id);
-        const s = Game.levelStatus(progress, id);
-        const inner = '<span class="lv-badge is-' + s + '">' + UI.icon(s === "done" ? "check" : s === "available" ? "play" : "lock") + "</span>" +
-          '<span class="lv-num">' + id + "</span>" +
-          '<span class="lv-title">' + UI.esc(level.title) + "<small>" + Game.TASK_LABELS[level.taskType] + "</small></span>" +
-          '<span class="lv-xp">+' + Game.xpFor(level) + " XP</span>";
-        return s === "locked" ? '<li><span class="lv-row is-locked" aria-disabled="true">' + inner + "</span></li>" : '<li><a class="lv-row is-' + s + '" href="' + levelUrl(id) + '">' + inner + "</a></li>";
-      }).join("");
       return (
         '<details class="card journal-item is-' + st + '"' + (st === "current" ? " open" : "") + ">" +
         "<summary>" +
@@ -263,43 +328,54 @@
         '<span class="journal-count">' + lp.done + " / " + lp.total + "</span>" +
         UI.icon("chevronDown", "journal-chevron") +
         "</summary>" +
-        '<ol class="lv-list">' + rows + "</ol></details>"
+        '<ol class="lv-list">' + loc.levels.map((id) => levelRow(id, id)).join("") + "</ol></details>"
       );
     }).join("");
   }
 
-  function toRoman(n) {
-    return ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV"][n];
-  }
-
-  /* ---------- профіль ---------- */
+  /* =========================================================
+     Профіль героя (усі світи)
+     ========================================================= */
 
   function renderProfile() {
-    const hero = Game.heroLevel(progress.xp);
+    const totalXp = Game.totalXpAll();
+    const hero = Game.heroLevel(totalXp);
     const pct = Math.round((hero.current / hero.needed) * 100);
-    const owned = Game.trophies(progress).length;
+    const worlds = Game.playableWorlds().map((w) => Game.forWorld(w.id));
+    const stats = worlds.reduce((acc, api) => {
+      const p = api.load();
+      acc.done += p.completed.length;
+      acc.total += api.LEVELS.length;
+      acc.bestStreak = Math.max(acc.bestStreak, p.bestStreak);
+      acc.trophies += api.trophies(p).length;
+      acc.locations += api.LOCATIONS.length;
+      return acc;
+    }, { done: 0, total: 0, bestStreak: 0, trophies: 0, locations: 0 });
+
     $("#profile").innerHTML =
       '<section class="card profile-hero" aria-label="Герой">' +
       '<div class="profile-avatar" id="profile-avatar"></div>' +
-      '<div class="profile-info"><p class="eyebrow">Мандрівник королівства</p><h2>Рівень ' + hero.level + "</h2>" +
+      '<div class="profile-info"><p class="eyebrow">Мандрівник між світами</p><h2>Рівень ' + hero.level + "</h2>" +
       '<div class="xp-head"><span>До рівня ' + (hero.level + 1) + "</span><span>" + hero.current + " / " + hero.needed + " XP</span></div>" +
       '<div class="xp-bar" role="progressbar" aria-label="Досвід до наступного рівня" aria-valuemin="0" aria-valuemax="' + hero.needed + '" aria-valuenow="' + hero.current + '"><span style="width:' + pct + '%"></span></div>' +
       '<dl class="stats">' +
-      "<div><dt>Місій пройдено</dt><dd>" + progress.completed.length + " / " + LEVELS.length + "</dd></div>" +
-      "<div><dt>Усього досвіду</dt><dd>" + progress.xp + " XP</dd></div>" +
-      "<div><dt>Серія з першої спроби</dt><dd>" + UI.icon("flame") + progress.streak + "</dd></div>" +
-      "<div><dt>Найкраща серія</dt><dd>" + progress.bestStreak + "</dd></div>" +
-      "<div><dt>Земель відновлено</dt><dd>" + owned + " / " + LOCATIONS.length + "</dd></div>" +
+      "<div><dt>Місій пройдено</dt><dd>" + stats.done + " / " + stats.total + "</dd></div>" +
+      "<div><dt>Усього досвіду</dt><dd>" + totalXp + " XP</dd></div>" +
+      "<div><dt>Серія в цьому світі</dt><dd>" + UI.icon("flame") + progress.streak + "</dd></div>" +
+      "<div><dt>Найкраща серія</dt><dd>" + stats.bestStreak + "</dd></div>" +
+      "<div><dt>Земель відновлено</dt><dd>" + stats.trophies + " / " + stats.locations + "</dd></div>" +
       "</dl></div></section>" +
-      '<h2 class="section-title">Трофеї</h2>' +
-      '<ul class="trophy-grid">' +
-      LOCATIONS.map((loc) => {
-        const has = Game.locationStatus(progress, loc) === "done";
-        return '<li class="card trophy' + (has ? " is-owned" : "") + '"><div class="trophy-art" data-item="' + loc.trophy.icon + '"></div>' +
-          "<div><h3>" + (has ? UI.esc(loc.trophy.name) : "???") + "</h3><p>" + UI.esc(loc.name) + "</p>" +
-          '<p class="trophy-event">' + (has ? UI.icon("check") + UI.esc(loc.event) : "Відкриється після проходження локації") + "</p></div></li>";
+      worlds.map((api) => {
+        const p = api.load();
+        return '<h2 class="section-title">Трофеї: ' + UI.esc(api.meta.name) + ' <small class="section-sub">' + p.completed.length + " / " + api.LEVELS.length + " місій</small></h2>" +
+          '<ul class="trophy-grid">' +
+          api.LOCATIONS.map((loc) => {
+            const has = api.locationStatus(p, loc) === "done";
+            return '<li class="card trophy' + (has ? " is-owned" : "") + '"><div class="trophy-art" data-item="' + loc.trophy.icon + '"></div>' +
+              "<div><h3>" + (has ? UI.esc(loc.trophy.name) : "???") + "</h3><p>" + UI.esc(loc.name) + "</p>" +
+              '<p class="trophy-event">' + (has ? UI.icon("check") + UI.esc(loc.event) : "Відкриється після проходження локації") + "</p></div></li>";
+          }).join("") + "</ul>";
       }).join("") +
-      "</ul>" +
       '<div class="danger-zone"><button type="button" class="btn btn-ghost" id="reset-progress">' + UI.icon("reset") + "Почати пригоду спочатку</button></div>";
     Art.mount($("#profile-avatar"), Art.hero(), "Аватар героя");
     document.querySelectorAll(".trophy-art").forEach((el) => {
@@ -307,9 +383,9 @@
       if (!el.closest(".is-owned")) c.classList.add("is-silhouette");
     });
     $("#reset-progress").addEventListener("click", () => {
-      if (window.confirm("Скинути весь прогрес, досвід і трофеї? Цю дію не можна скасувати.")) {
-        GameStore.reset();
-        progress = GameStore.load();
+      if (window.confirm("Скинути прогрес, досвід, чернетки й трофеї в усіх світах? Цю дію не можна скасувати.")) {
+        GameStore.reset(Game.playableWorlds().map((w) => w.id));
+        progress = Game.load();
         renderAll();
         UI.toast(UI.icon("reset") + " Пригоду розпочато заново");
       }
@@ -333,23 +409,31 @@
       }, 600 + i * 1200);
     });
     progress.celebrated = progress.celebrated.concat(fresh.map((l) => l.id));
-    GameStore.save(progress);
+    GameStore.save(progress, Game.WORLD_ID);
   }
 
   /* ---------- розділи ---------- */
 
-  const VIEWS = ["map", "projects", "handbook", "trophies"];
+  const VIEWS = ["hub", "map", "projects", "handbook", "trophies"];
+  const TITLES = { hub: "світи", map: "карта світу", projects: "проєкти", handbook: "довідник", trophies: "трофеї" };
+
+  function currentView() {
+    const name = location.hash.slice(1);
+    if (VIEWS.includes(name)) return name;
+    // Без хешу: якщо в URL обрано світ — його карта, інакше світ-хаб.
+    return Game.hasWorldParam ? "map" : "hub";
+  }
 
   function showView() {
-    const name = (location.hash || "#map").slice(1);
-    const view = VIEWS.includes(name) ? name : "map";
+    const view = currentView();
     VIEWS.forEach((v) => { document.getElementById("view-" + v).hidden = v !== view; });
     UI.setActiveNav($("#sidebar"), view);
+    if (view === "hub") renderHub();
     if (view === "projects") renderProjects();
-    if (view === "handbook") Handbook.render($("#handbook"), { root: "" });
+    if (view === "handbook") Handbook.render($("#handbook"), { root: "", world: Game.WORLD_ID });
     if (view === "trophies") renderProfile();
     if (view === "map") renderMap();
-    document.title = "JS Quest — " + { map: "карта світу", projects: "проєкти", handbook: "довідник", trophies: "трофеї" }[view];
+    document.title = "JS Quest — " + TITLES[view];
   }
 
   function renderAll() {
@@ -361,9 +445,9 @@
 
   /* ---------- старт ---------- */
 
-  UI.renderSidebar($("#sidebar"), "map", "");
+  UI.renderSidebar($("#sidebar"), currentView(), "");
   renderAll();
-  celebrateNewTrophies();
+  if (currentView() === "map") celebrateNewTrophies();
 
   window.addEventListener("hashchange", () => {
     showView();
@@ -374,6 +458,15 @@
   $("#map-labels").addEventListener("click", (event) => {
     const btn = event.target.closest(".loc-label");
     if (btn) selectLocation(Number(btn.dataset.loc));
+  });
+
+  $("#hub-labels").addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-portal]");
+    if (!btn) return;
+    const world = WORLDS.find((w) => w.id === btn.dataset.portal);
+    const status = Game.worldStatus(world);
+    UI.toast(UI.icon(status === "locked" ? "lock" : "hammer") + " <span><strong>" + UI.esc(world.name) + "</strong><br>" +
+      (status === "locked" ? "Портал відчиниться, коли пройдеш " + UI.esc(requirementText(world)) + "." : "Цей світ ще будується — портал відчиниться згодом.") + "</span>");
   });
 
   $("#location-panel").addEventListener("click", (event) => {
@@ -392,18 +485,19 @@
   // Повернулися з місії через «назад» (bfcache) — оновлюємо прогрес.
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) {
-      progress = GameStore.load();
+      progress = Game.load();
       renderAll();
     }
   });
 
-  // Легка анімація світу: вогнища, смолоскипи, блискавка (~3 кадри/с).
+  // Легка анімація світу: вогнища, портали, блискавка (~3 кадри/с).
   // Поважаємо налаштування «зменшити рух».
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (!reduceMotion) {
     setInterval(() => {
       frame++;
       if (!$("#view-map").hidden) drawMap();
+      if (!$("#view-hub").hidden) drawHub();
     }, 350);
   }
 })();

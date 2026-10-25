@@ -7,39 +7,69 @@
    Працює у двох режимах:
      • page   — окремий розділ на головній (index.html#handbook)
      • drawer — бічна панель на екрані місії (підглянути, не виходячи)
+   Для кожного світу — своя книга; світ обирається в панелі.
    ========================================================= */
 (function () {
   "use strict";
 
+  const CODE_TYPES = ["write-function", "fix-code", "write-markup", "fix-markup"];
+  const isMarkup = (level) => level.taskType === "write-markup" || level.taskType === "fix-markup";
+
+  // Мова прикладів світу: HTML/CSS-світ показує розмітку, решта — JavaScript.
+  function exampleLang(level) {
+    return level.exampleLang || (isMarkup(level) ? "html" : "js");
+  }
+
+  // Рішення як набір файлів: JS — один рядок, верстка — { html, css }.
+  function filesOf(value, level) {
+    if (!value) return [];
+    if (!isMarkup(level)) return [{ name: "", code: value, lang: "js" }];
+    const obj = typeof value === "string" ? safeParse(value) : value;
+    if (!obj) return [];
+    return [
+      obj.html != null && level.starterHtml != null ? { name: "index.html", code: obj.html, lang: "html" } : null,
+      obj.css != null && level.starterCss != null ? { name: "style.css", code: obj.css, lang: "css" } : null,
+    ].filter(Boolean);
+  }
+
+  function safeParse(text) {
+    try { return JSON.parse(text); } catch (e) { return null; }
+  }
+
   function answerHtml(level) {
     if (level.taskType === "predict-output") {
-      return '<pre class="code-block">' + UI.highlight(level.code) + "</pre>" +
-        '<p class="hb-label">Вивід консолі</p><pre class="code-block hb-output">' + UI.esc(level.expectedAnswer.join("\n")) + "</pre>";
+      return '<pre class="code-block">' + UI.highlight(level.code, exampleLang(level)) + "</pre>" +
+        '<p class="hb-label">' + UI.esc(level.answerLabel || "Вивід консолі") + '</p><pre class="code-block hb-output">' + UI.esc(level.expectedAnswer.join("\n")) + "</pre>";
     }
     if (level.taskType === "multiple-choice") {
-      return (level.code ? '<pre class="code-block">' + UI.highlight(level.code) + "</pre>" : "") +
-        '<p class="hb-label">Правильна відповідь</p><pre class="code-block">' + UI.highlight(level.expectedAnswer) + "</pre>";
+      return (level.code ? '<pre class="code-block">' + UI.highlight(level.code, exampleLang(level)) + "</pre>" : "") +
+        '<p class="hb-label">Правильна відповідь</p><pre class="code-block">' + UI.highlight(level.expectedAnswer, level.optionsLang || exampleLang(level)) + "</pre>";
     }
     if (level.taskType === "fill-blank") {
       let i = 0;
       const filled = level.starterCode.replace(/___/g, () => level.expectedAnswer[i++][0]);
-      return '<p class="hb-label">Заповнений код</p><pre class="code-block">' + UI.highlight(filled) + "</pre>";
+      return '<p class="hb-label">Заповнений код</p><pre class="code-block">' + UI.highlight(filled, exampleLang(level)) + "</pre>";
     }
     return "";
   }
 
-  function entryHtml(level, ctx) {
-    const isCode = level.taskType === "write-function" || level.taskType === "fix-code";
-    const own = isCode ? GameStore.getDraft(level.id) : null;
-    const showOwn = own && own.trim() && own !== level.solution;
+  function entryHtml(level, W, ctx) {
+    const isCode = CODE_TYPES.includes(level.taskType);
+    const own = isCode ? GameStore.getDraft(level.id, W.WORLD_ID) : null;
+    const ownFiles = filesOf(own, level);
+    const solFiles = filesOf(level.solution, level);
+    const sameAsSolution = ownFiles.length && ownFiles.every((f, i) => solFiles[i] && f.code === solFiles[i].code);
+    const showOwn = ownFiles.length && !sameAsSolution && ownFiles.some((f) => f.code.trim());
     const blocks = [
       '<p class="hb-concept">' + UI.md(level.concept) + "</p>",
-      level.example ? codeWithCopy("Приклад", level.example) : "",
+      level.example ? codeWithCopy("Приклад", level.example, exampleLang(level)) : "",
       '<p class="hb-label">Завдання</p><p>' + UI.md(level.prompt) + "</p>",
-      isCode && showOwn ? codeWithCopy("Твоє рішення", own) : "",
-      isCode ? codeWithCopy(showOwn ? "Еталонне рішення" : "Рішення", level.solution) : answerHtml(level),
+      showOwn ? ownFiles.map((f) => codeWithCopy("Твоє рішення" + (f.name ? " · " + f.name : ""), f.code, f.lang)).join("") : "",
+      isCode
+        ? solFiles.map((f) => codeWithCopy((showOwn ? "Еталонне рішення" : "Рішення") + (f.name ? " · " + f.name : ""), f.code, f.lang)).join("")
+        : answerHtml(level),
       '<p class="hb-hint">' + UI.icon("bulb") + "<span>" + UI.md(level.hint) + "</span></p>",
-      '<a class="btn btn-ghost hb-replay" href="' + ctx.root + "levels/level.html?id=" + level.id + '">' + UI.icon("reset") + "Повторити місію</a>",
+      '<a class="btn btn-ghost hb-replay" href="' + W.levelUrl(level.id, ctx.root) + '">' + UI.icon("reset") + "Повторити місію</a>",
     ];
     return (
       '<details class="hb-entry" data-id="' + level.id + '">' +
@@ -49,10 +79,10 @@
     );
   }
 
-  function codeWithCopy(label, code) {
+  function codeWithCopy(label, code, lang) {
     return '<div class="hb-code"><div class="hb-code-head"><p class="hb-label">' + UI.esc(label) + "</p>" +
       '<button type="button" class="hb-copy" data-copy aria-label="Копіювати: ' + UI.esc(label) + '">' + UI.icon("copy") + "<span>Копіювати</span></button></div>" +
-      '<pre class="code-block">' + UI.highlight(code) + "</pre></div>";
+      '<pre class="code-block">' + UI.highlight(code, lang) + "</pre></div>";
   }
 
   function lockedHtml(level) {
@@ -62,48 +92,57 @@
 
   // Текст, за яким шукаємо (лише відкриті сторінки — спойлерів у пошуку немає).
   function searchText(level) {
-    return [level.title, level.concept, level.example, level.prompt, level.hint, level.solution, level.locationName]
+    const sol = typeof level.solution === "object" && level.solution ? Object.values(level.solution).join(" ") : level.solution;
+    return [level.title, level.concept, level.example, level.prompt, level.hint, sol, level.locationName]
       .filter(Boolean).join(" ").toLowerCase();
   }
 
   /**
    * Малює довідник у контейнер.
-   * opts: { root: "" | "../", location: id локації для фільтра за замовчуванням, openId }
+   * opts: { root: "" | "../", world, location: id локації для фільтра, openId }
    */
   function render(container, opts) {
-    const ctx = Object.assign({ root: "", location: "all", openId: null }, opts);
-    const progress = GameStore.load();
+    const ctx = Object.assign({ root: "", world: Game.WORLD_ID, location: "all", openId: null }, opts);
+    const W = Game.forWorld(ctx.world) || Game;
+    const progress = W.load();
     const done = new Set(progress.completed);
-    const total = Game.LEVELS.length;
     const uid = "hb" + Math.random().toString(36).slice(2, 7);
+    const worlds = Game.playableWorlds();
 
     container.innerHTML =
       '<div class="hb-toolbar">' +
+      (worlds.length > 1
+        ? '<label class="hb-filter"><span class="visually-hidden">Світ</span><select id="' + uid + '-world">' +
+          worlds.map((w) => '<option value="' + w.id + '"' + (w.id === W.WORLD_ID ? " selected" : "") + ">" + UI.esc(w.tech) + "</option>").join("") +
+          "</select></label>"
+        : "") +
       '<label class="hb-search"><span class="visually-hidden">Пошук у довіднику</span>' + UI.icon("search") +
-      '<input type="search" id="' + uid + '-q" placeholder="Пошук: map, if, localStorage…" autocomplete="off"></label>' +
+      '<input type="search" id="' + uid + '-q" placeholder="Пошук: ' + UI.esc(W.WORLD_ID === "web" ? "flex, grid, form…" : "map, if, localStorage…") + '" autocomplete="off"></label>' +
       '<label class="hb-filter"><span class="visually-hidden">Локація</span><select id="' + uid + '-loc">' +
       '<option value="all">Усі локації</option>' +
-      Game.LOCATIONS.map((l) => '<option value="' + l.id + '">' + UI.esc(l.name) + "</option>").join("") +
+      W.LOCATIONS.map((l) => '<option value="' + l.id + '">' + UI.esc(l.name) + "</option>").join("") +
       "</select></label>" +
-      '<p class="hb-count">Відкрито сторінок: <strong>' + done.size + "</strong> з " + total + "</p>" +
+      '<p class="hb-count">Відкрито сторінок: <strong>' + done.size + "</strong> з " + W.LEVELS.length + "</p>" +
       "</div>" +
       '<div class="hb-list" id="' + uid + '-list"></div>';
 
     const q = container.querySelector("#" + uid + "-q");
     const sel = container.querySelector("#" + uid + "-loc");
     const list = container.querySelector("#" + uid + "-list");
+    const worldSel = container.querySelector("#" + uid + "-world");
     sel.value = String(ctx.location);
+    if (!sel.value) sel.value = "all";
 
     function draw() {
       const term = q.value.trim().toLowerCase();
       const locFilter = sel.value;
-      const html = Game.LOCATIONS.filter((loc) => locFilter === "all" || String(loc.id) === locFilter).map((loc) => {
-        const levels = loc.levels.map((id) => Game.getLevel(id));
+      const html = W.LOCATIONS.filter((loc) => locFilter === "all" || String(loc.id) === locFilter).map((loc) => {
+        const levels = loc.levels.map((id) => W.getLevel(id));
         const opened = levels.filter((l) => done.has(l.id));
         const visible = term ? opened.filter((l) => searchText(l).includes(term)) : levels;
         if (!visible.length) return "";
         return '<section class="hb-group"><h2>' + UI.esc(loc.name) + "<span>" + opened.length + " / " + levels.length + "</span></h2>" +
-          visible.map((l) => (done.has(l.id) ? entryHtml(l, ctx) : lockedHtml(l))).join("") + "</section>";
+          visible.map((l) => (done.has(l.id) ? entryHtml(l, W, ctx) : lockedHtml(l))).join("") + "</section>";
       }).join("");
       list.innerHTML = html || '<p class="hb-empty">' + (term ? "Нічого не знайдено серед відкритих сторінок." : "Тут поки порожньо — пройди першу місію, і довідник почне заповнюватися.") + "</p>";
       if (ctx.openId) {
@@ -114,6 +153,12 @@
 
     q.addEventListener("input", draw);
     sel.addEventListener("change", draw);
+    if (worldSel) {
+      worldSel.addEventListener("change", () => {
+        render(container, Object.assign({}, ctx, { world: worldSel.value, location: "all", openId: null }));
+        container.querySelector("select").focus();
+      });
+    }
     list.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-copy]");
       if (!btn) return;
@@ -166,5 +211,5 @@
     api.focusSearch();
   }
 
-  window.Handbook = { render, openDrawer };
+  window.Handbook = { render, openDrawer, filesOf };
 })();

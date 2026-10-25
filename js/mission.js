@@ -19,7 +19,7 @@
   if (!level) {
     main.innerHTML =
       '<section class="card locked-screen"><h1>Такої місії немає</h1><p>У королівстві лише ' + Game.LEVELS.length +
-      ' місій. Повернися на карту й обери шлях звідти.</p><a class="btn btn-primary" href="../index.html#map">' + UI.icon("map") + "На карту</a></section>";
+      ' місій. Повернися на карту й обери шлях звідти.</p><a class="btn btn-primary" href="' + Game.mapUrl("../") + '">' + UI.icon("map") + "На карту</a></section>";
     return;
   }
 
@@ -34,9 +34,9 @@
     main.innerHTML =
       '<section class="card locked-screen"><div class="locked-art"></div><h1>Ця місія ще за туманом</h1>' +
       "<p>«" + UI.esc(level.title) + "» відкриється, щойно ти пройдеш попередню місію. Шлях королівства прокладають крок за кроком.</p>" +
-      '<div class="locked-actions"><a class="btn btn-primary" href="level.html?id=' + current + '">' + UI.icon("play") + "До поточної місії</a>" +
-      '<a class="btn btn-ghost" href="../index.html#map">' + UI.icon("map") + "На карту</a></div></section>";
-    Art.mount($(".locked-art"), Art.landmark(loc.id, 1, 0, true), "Затуманена локація");
+      '<div class="locked-actions"><a class="btn btn-primary" href="' + Game.levelUrl(current, "../") + '">' + UI.icon("play") + "До поточної місії</a>" +
+      '<a class="btn btn-ghost" href="' + Game.mapUrl("../") + '">' + UI.icon("map") + "На карту</a></div></section>";
+    Art.mount($(".locked-art"), Art.landmark(loc.id, 1, 0, true, Game.WORLD_ID), "Затуманена локація");
     return;
   }
   const alreadyDone = startProgress.completed.includes(levelId);
@@ -170,7 +170,8 @@
     main.innerHTML =
       '<div class="mission">' +
       '<header class="m-head">' +
-      '<nav class="crumbs" aria-label="Хлібні крихти"><a href="../index.html#map">' + UI.icon("map") + UI.esc(loc.name) + "</a>" + UI.icon("chevronRight") +
+      '<nav class="crumbs" aria-label="Хлібні крихти"><a href="../index.html#hub">' + UI.icon("portal") + UI.esc(Game.meta.tech) + "</a>" + UI.icon("chevronRight") +
+      '<a href="' + Game.mapUrl("../") + '">' + UI.icon("map") + UI.esc(loc.name) + "</a>" + UI.icon("chevronRight") +
       '<span aria-current="page">' + UI.esc(level.title) + "</span></nav>" +
       "<h1>" + UI.esc(level.title) + "</h1>" +
       '<div class="m-progress"><span>Місія ' + (indexInLoc + 1) + " з " + loc.levels.length + "</span>" + dotsHtml() +
@@ -200,7 +201,7 @@
   function drawScene() {
     // На вузьких екранах сцена нижча, щоб завдання не ховалося під нею.
     const height = window.innerWidth <= 760 ? 128 : 176;
-    Art.renderScene($("#scene"), loc.id, state.sceneProgress, { frame: state.frame, sparkle: state.sparkle, height });
+    Art.renderScene($("#scene"), loc.id, state.sceneProgress, { frame: state.frame, sparkle: state.sparkle, height, world: Game.WORLD_ID });
   }
 
   function animateSolve(from, to) {
@@ -335,7 +336,7 @@
   }
 
   function nextHref() {
-    return levelId < Game.LEVELS.length ? "level.html?id=" + (levelId + 1) : "../index.html#trophies";
+    return levelId < Game.LEVELS.length ? Game.levelUrl(levelId + 1, "../") : "../index.html#hub";
   }
 
   function setResult(kind, title, text) {
@@ -351,7 +352,7 @@
       '<span class="result-icon">' + UI.icon(iconName) + "</span>" +
       "<div><h2>" + UI.esc(title || "Світ чекає на тебе") + "</h2><p>" + UI.md(text || "Виконай завдання й натисни «" + (isCodeTask ? "Запустити" : "Перевірити") + "».") + "</p></div>" +
       (kind === "success"
-        ? '<a class="btn btn-primary" id="next-btn" href="' + nextHref() + '">' + (levelId < Game.LEVELS.length ? "Наступна місія" : "До королівства") + UI.icon("chevronRight") + "</a>"
+        ? '<a class="btn btn-primary" id="next-btn" href="' + nextHref() + '">' + (levelId < Game.LEVELS.length ? "Наступна місія" : "До порталів") + UI.icon("chevronRight") + "</a>"
         : "");
   }
 
@@ -570,7 +571,7 @@
   $("#run").addEventListener("click", run);
   $("#reset").addEventListener("click", reset);
   // Довідник відкривається на поточній локації — щоб швидко підглянути схожі теми.
-  $("#open-handbook").addEventListener("click", () => Handbook.openDrawer({ root: "../", location: loc.id }));
+  $("#open-handbook").addEventListener("click", () => Handbook.openDrawer({ root: "../", world: Game.WORLD_ID, location: loc.id }));
   $("#console-toggle").addEventListener("click", () => {
     const box = $("#console");
     const collapsed = box.classList.toggle("is-collapsed");

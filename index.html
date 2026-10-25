@@ -18,14 +18,35 @@
     <aside class="sidebar" id="sidebar"></aside>
 
     <main class="main" id="main" tabindex="-1">
+      <!-- Світ-хаб -->
+      <section class="view" id="view-hub" aria-labelledby="hub-title" hidden>
+        <header class="topbar">
+          <div class="topbar-title">
+            <h1 id="hub-title">Світи пригод</h1>
+            <p class="subtitle">Кожен портал веде у світ однієї технології.<br>Пройди їх усі — і станеш full-stack розробником.</p>
+          </div>
+          <div class="xp-card js-xp"></div>
+        </header>
+        <section class="card map-card hub-card" aria-label="Світ-хаб з порталами">
+          <div class="map-scroll">
+            <div class="map-stage hub-stage">
+              <canvas class="pixel map-canvas" id="hub-canvas" role="img" aria-label="Летючий острів з порталами у світи"></canvas>
+              <div class="map-labels" id="hub-labels"></div>
+            </div>
+          </div>
+        </section>
+        <h2 class="section-title">Усі світи</h2>
+        <div class="worlds-grid" id="worlds-grid"></div>
+      </section>
+
       <!-- Карта -->
-      <section class="view" id="view-map" aria-labelledby="map-title">
+      <section class="view" id="view-map" aria-labelledby="map-title" hidden>
         <header class="topbar">
           <div class="topbar-title">
             <h1 id="map-title">Твоя пригода</h1>
-            <p class="subtitle">Вивчай JavaScript. Виконуй місії.<br>Відкривай нові землі.</p>
+            <p class="subtitle" id="map-subtitle">Вивчай JavaScript. Виконуй місії.<br>Відкривай нові землі.</p>
           </div>
-          <div class="xp-card" id="xp-card"></div>
+          <div class="xp-card js-xp"></div>
         </header>
 
         <div class="map-layout">
@@ -92,9 +113,11 @@
   </div>
 
   <script src="js/storage.js"></script>
+  <script src="js/worlds.js"></script>
   <script src="js/levels.js"></script>
   <script src="js/game.js"></script>
   <script src="js/art.js"></script>
+  <script src="js/art-hub.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/handbook.js"></script>
   <script src="js/app.js"></script>

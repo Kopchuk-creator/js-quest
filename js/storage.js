@@ -1,19 +1,29 @@
 /* =========================================================
    storage.js — уся робота з localStorage.
-   Прогрес лежить під ключем "js-game-progress" (як у SPEC.md),
-   чернетки коду — окремо, щоб не роздувати основний запис.
+   Прогрес кожного світу зберігається окремо. Для першого світу
+   (JavaScript) лишається ключ "js-game-progress" зі SPEC.md —
+   так старий прогрес гравців не губиться; інші світи отримують
+   ключі на кшталт "js-game-progress:web".
    ========================================================= */
 (function () {
   "use strict";
 
   const PROGRESS_KEY = "js-game-progress";
   const DRAFTS_KEY = "js-game-drafts";
+  const LAST_WORLD_KEY = "js-game-last-world";
+
+  let currentWorld = "js";
+
+  function suffix(world) {
+    const w = world || currentWorld;
+    return w === "js" ? "" : ":" + w;
+  }
 
   function emptyProgress() {
     return {
       version: 1,
       completed: [],       // масив id пройдених рівнів
-      xp: 0,               // загальний досвід
+      xp: 0,               // досвід, здобутий у цьому світі
       streak: 0,           // скільки рівнів поспіль пройдено з першої спроби
       bestStreak: 0,
       fails: {},           // { [id]: кількість невдалих спроб } — лише для статистики, без штрафів
@@ -33,8 +43,8 @@
     try { window.localStorage.removeItem(key); } catch (e) { /* ignore */ }
   }
 
-  function load() {
-    const raw = safeGet(PROGRESS_KEY);
+  function load(world) {
+    const raw = safeGet(PROGRESS_KEY + suffix(world));
     if (!raw) return emptyProgress();
     try {
       const data = JSON.parse(raw);
@@ -50,35 +60,43 @@
     }
   }
 
-  function save(progress) {
-    return safeSet(PROGRESS_KEY, JSON.stringify(progress));
+  function save(progress, world) {
+    return safeSet(PROGRESS_KEY + suffix(world), JSON.stringify(progress));
   }
 
-  function loadDrafts() {
-    try { return JSON.parse(safeGet(DRAFTS_KEY)) || {}; } catch (e) { return {}; }
+  function loadDrafts(world) {
+    try { return JSON.parse(safeGet(DRAFTS_KEY + suffix(world))) || {}; } catch (e) { return {}; }
   }
 
   const GameStore = {
+    setWorld(world) { currentWorld = world; },
     load,
     save,
-    reset() {
-      safeRemove(PROGRESS_KEY);
-      safeRemove(DRAFTS_KEY);
+    // Скидає прогрес усіх світів.
+    reset(worldIds) {
+      (worldIds || ["js"]).forEach((w) => {
+        safeRemove(PROGRESS_KEY + suffix(w));
+        safeRemove(DRAFTS_KEY + suffix(w));
+      });
+      safeRemove(LAST_WORLD_KEY);
     },
-    getDraft(id) {
-      const drafts = loadDrafts();
+    // Чернетки — довільний рядок (для HTML/CSS-світу там JSON з кількома файлами).
+    getDraft(id, world) {
+      const drafts = loadDrafts(world);
       return typeof drafts[id] === "string" ? drafts[id] : null;
     },
-    saveDraft(id, code) {
-      const drafts = loadDrafts();
+    saveDraft(id, code, world) {
+      const drafts = loadDrafts(world);
       drafts[id] = code;
-      safeSet(DRAFTS_KEY, JSON.stringify(drafts));
+      safeSet(DRAFTS_KEY + suffix(world), JSON.stringify(drafts));
     },
-    clearDraft(id) {
-      const drafts = loadDrafts();
+    clearDraft(id, world) {
+      const drafts = loadDrafts(world);
       delete drafts[id];
-      safeSet(DRAFTS_KEY, JSON.stringify(drafts));
+      safeSet(DRAFTS_KEY + suffix(world), JSON.stringify(drafts));
     },
+    lastWorld() { return safeGet(LAST_WORLD_KEY); },
+    setLastWorld(world) { safeSet(LAST_WORLD_KEY, world); },
   };
 
   window.GameStore = GameStore;

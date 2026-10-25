@@ -30,6 +30,9 @@
     compass: '<circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"/>',
     search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
     copy: '<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5V5.5a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"/>',
+    portal: '<rect x="5" y="2.5" width="14" height="19" rx="1.5"/><path d="M9 7.5c2-1.5 6-.5 6 2.5s-4 2.5-5 5 2 3 5 1.5"/>',
+    eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>',
+    hammer: '<path d="m14 6 4 4M5 21l9.5-9.5M13 4.5l2.5-2.5L22 8.5 19.5 11Z"/>',
   };
 
   function icon(name, extraClass) {
@@ -58,7 +61,79 @@
 
   const TOKEN = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"?|'(?:\\.|[^'\\\n])*'?|`(?:\\.|[^`\\])*`?)|(\b\d+(?:\.\d+)?\b)|([A-Za-z_$Ѐ-ӿ][\w$Ѐ-ӿ]*)|(\s+)|([\s\S])/g;
 
-  function highlight(code) {
+  function highlight(code, lang) {
+    if (lang === "html") return highlightHtml(code);
+    if (lang === "css") return highlightCss(code);
+    return highlightJs(code);
+  }
+
+  /* ---------- підсвітка HTML ---------- */
+
+  const HTML_TOKEN = /(<!--[\s\S]*?(?:-->|$))|(<!doctype[^>]*>?)|(<\/?)([A-Za-z][\w-]*)([^>]*?)(\/?>|$)|(&[#\w]+;)|([^<&]+|[<&])/gi;
+
+  function highlightAttrs(text) {
+    let out = "";
+    const re = /(\s+)|([^\s=]+)(?:(\s*=\s*)("[^"]*"?|'[^']*'?|[^\s]+))?/g;
+    let m;
+    while ((m = re.exec(text))) {
+      if (m[1]) out += m[1];
+      else {
+        out += '<span class="tk-attr">' + esc(m[2]) + "</span>";
+        if (m[3]) out += esc(m[3]) + '<span class="tk-str">' + esc(m[4] || "") + "</span>";
+      }
+    }
+    return out;
+  }
+
+  function highlightHtml(code) {
+    let out = "";
+    let m;
+    HTML_TOKEN.lastIndex = 0;
+    while ((m = HTML_TOKEN.exec(code))) {
+      if (m[0] === "") { HTML_TOKEN.lastIndex++; continue; }
+      if (m[1]) out += '<span class="tk-com">' + esc(m[1]) + "</span>";
+      else if (m[2]) out += '<span class="tk-kw">' + esc(m[2]) + "</span>";
+      else if (m[4]) out += esc(m[3]) + '<span class="tk-tag">' + esc(m[4]) + "</span>" + highlightAttrs(m[5]) + esc(m[6] || "");
+      else if (m[7]) out += '<span class="tk-num">' + esc(m[7]) + "</span>";
+      else out += esc(m[8]);
+    }
+    return out;
+  }
+
+  /* ---------- підсвітка CSS ----------
+     Простий автомат: поза фігурними дужками — селектори,
+     усередині правила — властивість до «:» і значення після. */
+
+  function highlightCss(code) {
+    let out = "";
+    const stack = [];
+    let inValue = false;
+    let atPrelude = false;
+    const re = /(\/\*[\s\S]*?(?:\*\/|$))|("(?:\\.|[^"\\\n])*"?|'(?:\\.|[^'\\\n])*'?)|(@[\w-]+)|([{}:;])|([^{}:;"'\/@]+|[\/"'@])/g;
+    let m;
+    while ((m = re.exec(code))) {
+      const inRule = stack[stack.length - 1] === "rule";
+      if (m[1]) out += '<span class="tk-com">' + esc(m[1]) + "</span>";
+      else if (m[2]) out += '<span class="tk-str">' + esc(m[2]) + "</span>";
+      else if (m[3]) { out += '<span class="tk-ctl">' + esc(m[3]) + "</span>"; atPrelude = true; }
+      else if (m[4]) {
+        const p = m[4];
+        if (p === "{") { stack.push(atPrelude ? "group" : "rule"); atPrelude = false; inValue = false; }
+        else if (p === "}") { stack.pop(); inValue = false; }
+        else if (p === ";") inValue = false;
+        else if (p === ":" && inRule && !inValue) inValue = true;
+        out += esc(p);
+      } else {
+        const text = m[5];
+        if (!inRule) out += atPrelude ? esc(text) : '<span class="tk-fn">' + esc(text) + "</span>";
+        else if (!inValue) out += '<span class="tk-kw">' + esc(text) + "</span>";
+        else out += esc(text).replace(/(#[0-9a-fA-F]{3,8}\b|-?\d*\.?\d+(?:[a-z]+|%)?)/g, '<span class="tk-num">$1</span>');
+      }
+    }
+    return out;
+  }
+
+  function highlightJs(code) {
     let out = "";
     let match;
     TOKEN.lastIndex = 0;
@@ -83,17 +158,20 @@
 
   // root — шлях до кореня сайту ("" для index.html, "../" для levels/level.html).
   function renderSidebar(container, active, root) {
-    const progress = GameStore.load();
+    // Карта, практика й проєкти ведуть у поточний (останній відвіданий) світ.
+    const progress = Game.load();
     const current = Game.currentLevelId(progress) || Game.LEVELS.length;
+    const worldQuery = "index.html?world=" + Game.WORLD_ID;
     const items = [
-      { id: "map", label: "Карта", icon: "map", href: root + "index.html#map" },
-      { id: "practice", label: "Практика", icon: "code", href: root + "levels/level.html?id=" + current },
-      { id: "projects", label: "Проєкти", icon: "projects", href: root + "index.html#projects" },
-      { id: "handbook", label: "Довідник", icon: "book", href: root + "index.html#handbook" },
+      { id: "hub", label: "Світи", icon: "portal", href: root + "index.html#hub" },
+      { id: "map", label: "Карта", icon: "map", href: root + worldQuery + "#map" },
+      { id: "practice", label: "Практика", icon: "code", href: Game.levelUrl(current, root) },
+      { id: "projects", label: "Проєкти", icon: "projects", href: root + worldQuery + "#projects" },
+      { id: "handbook", label: "Довідник", icon: "book", href: root + worldQuery + "#handbook" },
       { id: "trophies", label: "Трофеї", icon: "trophy", href: root + "index.html#trophies" },
     ];
     container.innerHTML =
-      '<a class="logo" href="' + root + 'index.html#map" aria-label="JS Quest — на карту">' +
+      '<a class="logo" href="' + root + 'index.html#hub" aria-label="JS Quest — до світів">' +
       '<span class="logo-mark" aria-hidden="true">{ }</span><span class="logo-text">JS<br>Quest</span></a>' +
       '<nav class="nav" aria-label="Головне меню"><ul>' +
       items.map((it) =>

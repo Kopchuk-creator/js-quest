@@ -364,6 +364,32 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .trophy .trophy-event .icon { margin-top: 2px; }
 .danger-zone { display: flex; justify-content: flex-end; }
 
+/* ---------- світ-хаб ---------- */
+
+.hub-stage { aspect-ratio: 400 / 240; }
+.portal-label { text-decoration: none; }
+.portal-label .loc-name { font-size: 12px; padding: 4px 8px; max-width: 128px; white-space: normal; text-align: center; line-height: 1.25; }
+.portal-tech { font-size: 11px; font-weight: 700; color: var(--text-muted); background: rgba(17, 18, 19, 0.8); padding: 1px 8px; border-radius: 6px; }
+.portal-label.is-open .loc-name { border-color: var(--yellow); color: var(--yellow); }
+.portal-label.is-soon .loc-name, .portal-label.is-locked .loc-name { color: var(--text-muted); }
+.portal-label.is-soon { opacity: 0.8; }
+
+.worlds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--s4); }
+.world-card { display: flex; gap: var(--s4); padding: var(--s4); align-items: flex-start; border-top: 3px solid var(--world); }
+.world-card.is-soon, .world-card.is-locked { border-top-color: var(--border-strong); }
+.world-portal { flex: none; width: 60px; }
+.world-portal canvas { width: 60px; height: 80px; }
+.world-card.is-soon .world-portal canvas, .world-card.is-locked .world-portal canvas { opacity: 0.7; }
+.world-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+.world-info h3 { font-size: 18px; font-weight: 800; }
+.world-info p:not(.eyebrow) { color: var(--text-muted); font-size: 14px; }
+.world-info .btn { align-self: flex-start; margin-top: 4px; min-height: 40px; }
+.world-progress { display: flex; align-items: center; gap: var(--s3); font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.world-progress .xp-bar { flex: 1; height: 8px; }
+.world-progress .xp-bar span { background: var(--world); }
+.world-note { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+.section-sub { font-size: 14px; font-weight: 600; color: var(--text-dim); }
+
 /* ---------- довідник ---------- */
 
 .handbook { padding: var(--s5); }
