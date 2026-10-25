@@ -42,6 +42,7 @@ js/handbook.js        — довідник героя
 js/checker.js         — пісочниці й перевірка відповідей усіх типів завдань
 js/app.js, mission.js — логіка екранів
 tests/run.html        — автоперевірка: еталонні рішення всіх рівнів проходять, стартовий код — ні
+tests/unit.html       — модульні тести рушія: цикли без дужок не вішають сторінку, порівняння масивів, гра без localStorage
 assets/sandbox/       — картинки для завдань із версткою
 assets/locations/     — ілюстрації локацій (js-1…11.webp, web-1…12.webp)
 assets/maps/          — зала порталів (hub.webp) і намальовані карти світів (js-map.webp, web-map.webp)

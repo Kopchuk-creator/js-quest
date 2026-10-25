@@ -803,6 +803,7 @@
   /* ---------- старт ---------- */
 
   UI.renderSidebar($("#sidebar"), currentView(), "");
+  UI.warnStorage();
   setupMapTools();
   renderAll();
   if (currentView() === "map") celebrateNewTrophies();

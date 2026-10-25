@@ -31,16 +31,49 @@
     };
   }
 
-  // localStorage може бути недоступний (приватний режим, заборона cookie) —
-  // тоді гра працює, просто без збереження між сесіями.
+  /* localStorage може бути недоступний (заборона даних сайтів, переповнення,
+     деякі приватні режими). Тоді прогрес живе в пам'яті сторінки, а між
+     сторінками гри (карта ↔ місія) переїжджає через window.name — він
+     зберігається при переходах у межах вкладки. Після закриття вкладки
+     такий прогрес зникне — про це гравця попереджає UI (GameStore.persistent). */
+  const NAME_PREFIX = "jsq-state:";
+  const memory = {};
+  try {
+    if (typeof window.name === "string" && window.name.startsWith(NAME_PREFIX)) {
+      Object.assign(memory, JSON.parse(window.name.slice(NAME_PREFIX.length)));
+    }
+  } catch (e) { /* пошкоджений стан — починаємо з порожнього */ }
+
+  let persistent = (function () {
+    try {
+      window.localStorage.setItem("js-game-probe", "1");
+      window.localStorage.removeItem("js-game-probe");
+      return true;
+    } catch (e) {
+      return false;
+    }
+  })();
+
+  function syncMemory() {
+    try { window.name = NAME_PREFIX + JSON.stringify(memory); } catch (e) { /* ignore */ }
+  }
   function safeGet(key) {
-    try { return window.localStorage.getItem(key); } catch (e) { return null; }
+    if (Object.prototype.hasOwnProperty.call(memory, key)) return memory[key];
+    if (!persistent) return null;
+    try { return window.localStorage.getItem(key); } catch (e) { persistent = false; return null; }
   }
   function safeSet(key, value) {
-    try { window.localStorage.setItem(key, value); return true; } catch (e) { return false; }
+    if (persistent) {
+      try { window.localStorage.setItem(key, value); return true; } catch (e) { persistent = false; }
+    }
+    memory[key] = String(value);
+    syncMemory();
+    return false;
   }
   function safeRemove(key) {
-    try { window.localStorage.removeItem(key); } catch (e) { /* ignore */ }
+    if (Object.prototype.hasOwnProperty.call(memory, key)) { delete memory[key]; syncMemory(); }
+    if (!persistent) return;
+    try { window.localStorage.removeItem(key); } catch (e) { persistent = false; }
   }
 
   function load(world) {
@@ -69,6 +102,11 @@
   }
 
   const GameStore = {
+    // false — браузер не дає зберігати дані: прогрес живе лише в цій вкладці.
+    get persistent() { return persistent; },
+    // Чи вже попереджали гравця в цій вкладці (щоб не повторювати на кожній сторінці).
+    storageWarned() { return memory["js-game-storage-warned"] === "1"; },
+    markStorageWarned() { memory["js-game-storage-warned"] = "1"; syncMemory(); },
     setWorld(world) { currentWorld = world; },
     load,
     save,

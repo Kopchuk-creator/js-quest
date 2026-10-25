@@ -227,6 +227,15 @@
   }
 
   // Короткі повідомлення внизу екрана (світові події, трофеї).
+  // Якщо браузер не дає зберігати дані — чесно кажемо, що прогрес живе лише в цій вкладці.
+  // force — показати навіть якщо вже попереджали (наприклад, після пройденої місії).
+  function warnStorage(force) {
+    if (GameStore.persistent || (!force && GameStore.storageWarned())) return;
+    GameStore.markStorageWarned();
+    toast(icon("lock") + " <span><strong>Прогрес не зберігається на пристрої</strong><br>Браузер заборонив цьому сайту зберігати дані. " +
+      "Пройдене житиме, доки відкрита ця вкладка. Щоб зберегти назавжди, дозволь сайту зберігати дані.</span>", "is-warning");
+  }
+
   function toast(html, variant) {
     let host = document.querySelector(".toasts");
     if (!host) {
@@ -264,5 +273,5 @@
 
   document.documentElement.classList.toggle("motion-off", motion() === "off");
 
-  window.UI = { icon, esc, md, highlight, guessLang, renderSidebar, refreshSidebarHero, setActiveNav, toast, motion, setMotion };
+  window.UI = { icon, esc, md, highlight, guessLang, renderSidebar, refreshSidebarHero, setActiveNav, toast, warnStorage, motion, setMotion };
 })();

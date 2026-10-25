@@ -32,34 +32,55 @@
   }
 
   /* ---------- захист від безкінечних циклів ----------
-     Після «{» кожного for / while / do вставляється виклик
-     __jsqGuard(), який кидає помилку, якщо код крутиться
-     довше за LOOP_LIMIT_MS. */
+     __jsqGuard() кидає помилку, якщо код крутиться довше за LOOP_LIMIT_MS.
+     Він стоїть у двох місцях:
+       • в умові кожного while (і хвоста do…while) та класичного for:
+         while (c) → while (__jsqGuard() && (c)), for (;;) → for (; __jsqGuard(); ) —
+         так захищені й цикли без фігурних дужок: «while (true);», «for (;;) continue;»;
+       • першим рядком тіла циклу в «{ }» — для for…of / for…in. */
 
   function addLoopGuards(code) {
     const masked = maskCode(code);
-    const inserts = [];
+    const inserts = []; // { pos, text }
     const re = /\b(for|while|do)\b/g;
     let m;
     while ((m = re.exec(masked))) {
-      if (masked[m.index - 1] === ".") continue;
+      if (masked[m.index - 1] === "." || /[\w$]/.test(masked[m.index - 1] || "")) continue;
       let i = m.index + m[1].length;
       if (m[1] !== "do") {
         while (/\s/.test(masked[i] || "")) i++;
+        if (m[1] === "for" && masked.startsWith("await", i)) {
+          i += 5;
+          while (/\s/.test(masked[i] || "")) i++;
+        }
         if (masked[i] !== "(") continue;
+        const open = i;
+        // Закриваюча дужка заголовка і крапки з комою верхнього рівня (для for).
+        const semis = [];
         let depth = 0;
         for (; i < masked.length; i++) {
-          if (masked[i] === "(") depth++;
-          else if (masked[i] === ")" && --depth === 0) break;
+          const ch = masked[i];
+          if (ch === "(" || ch === "[" || ch === "{") depth++;
+          else if (ch === ")" || ch === "]" || ch === "}") { if (--depth === 0) break; }
+          else if (ch === ";" && depth === 1) semis.push(i);
         }
-        i++;
+        const close = i;
+        if (close >= masked.length) continue;
+        if (m[1] === "while") {
+          inserts.push({ pos: open + 1, text: "__jsqGuard() && (" }, { pos: close, text: ")" });
+        } else if (semis.length === 2) {
+          const [s1, s2] = semis;
+          if (!masked.slice(s1 + 1, s2).trim()) inserts.push({ pos: s1 + 1, text: " __jsqGuard() " });
+          else inserts.push({ pos: s1 + 1, text: "__jsqGuard() && (" }, { pos: s2, text: ")" });
+        }
+        i = close + 1;
       }
       while (/\s/.test(masked[i] || "")) i++;
-      if (masked[i] === "{") inserts.push(i + 1);
+      if (masked[i] === "{") inserts.push({ pos: i + 1, text: "__jsqGuard();" });
     }
     let out = code;
-    inserts.sort((a, b) => b - a).forEach((pos) => {
-      out = out.slice(0, pos) + "__jsqGuard();" + out.slice(pos);
+    inserts.sort((a, b) => b.pos - a.pos).forEach(({ pos, text }) => {
+      out = out.slice(0, pos) + text + out.slice(pos);
     });
     return out;
   }
@@ -89,6 +110,9 @@
     if (a === b || (a !== a && b !== b)) return true;
     if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
     if (Array.isArray(a) !== Array.isArray(b)) return false;
+    // length не входить до Object.keys: без цієї перевірки [] дорівнював би new Array(1).
+    // Порожня позиція і явний undefined різняться набором ключів нижче.
+    if (Array.isArray(a) && a.length !== b.length) return false;
     const ka = Object.keys(a), kb = Object.keys(b);
     if (ka.length !== kb.length) return false;
     return ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && deepEqual(a[k], b[k]));
@@ -111,7 +135,7 @@
     if (value.nodeType) return "[" + value.nodeName + "]";
     if (d > 2) return Array.isArray(value) ? "[…]" : "{…}";
     if (Array.isArray(value)) {
-      const items = value.slice(0, 12).map((v) => show(v, d + 1));
+      const items = Array.from({ length: Math.min(value.length, 12) }, (_, i) => (i in value ? show(value[i], d + 1) : "<порожньо>"));
       if (value.length > 12) items.push("… ще " + (value.length - 12));
       return "[" + items.join(", ") + "]";
     }
@@ -229,6 +253,7 @@
         err.name = "InfiniteLoopError";
         throw err;
       }
+      return true; // стоїть в умовах циклів: __jsqGuard() && (умова)
     }
 
     function safeCall(cb, args) {

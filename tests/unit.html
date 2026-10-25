@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JS Quest — модульні тести</title>
+  <style>
+    body { background: #111213; color: #f3f2ee; font: 14px/1.5 system-ui, sans-serif; margin: 24px; }
+    h1 { font-size: 22px; } h2 { font-size: 16px; margin-top: 24px; }
+    li { margin: 2px 0; } .ok { color: #5ee0a0; } .bad { color: #ff8a76; font-weight: 700; }
+    code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: #a8aab0; }
+  </style>
+  <script src="../js/worlds.js"></script>
+  <script src="../js/levels.js"></script>
+  <script src="../js/levels-web.js"></script>
+  <script src="../js/checker.js"></script>
+</head>
+<body>
+  <h1>Модульні тести</h1>
+  <p>Регресійні перевірки рушія: захист від безкінечних циклів, порівняння значень і робота без доступу до сховища.</p>
+  <p id="summary">Перевіряю…</p>
+  <div id="out"></div>
+  <script>
+    (async () => {
+      const groups = [];
+      let group = null;
+      const section = (title) => { group = { title, items: [] }; groups.push(group); };
+      const check = (name, pass, detail) => group.items.push({ name, pass: !!pass, detail });
+      const { addLoopGuards } = Checker._internals;
+      const jsLevel = (id) => WORLD_DATA.js.levels.find((l) => l.id === id);
+
+      /* ---------- безкінечні цикли ---------- */
+      section("Захист від безкінечних циклів");
+      for (const code of ["while (true);", "for (;;) continue;", "let i = 0; while (i < 3) ;", "do ; while (true);", "for (let i = 0; i < 1; ) {}"]) {
+        check("захист вставлено: " + code, addLoopGuards(code).includes("__jsqGuard()"), addLoopGuards(code));
+      }
+      check("рядки й коментарі не чіпаються", addLoopGuards('const s = "while (true)"; // for (;;)') === 'const s = "while (true)"; // for (;;)');
+      // Справжній запуск через runCode: сторінка має не зависнути, а повернути зрозумілу помилку.
+      const loopLevel = {
+        taskType: "write-function", functionName: "spin",
+        testCases: [{ input: [], expectedOutput: 1 }],
+      };
+      for (const body of ["while (true);", "for (;;) continue;", "let n = 0; while (n < 5) ; return n;"]) {
+        const t0 = performance.now();
+        const r = await Checker.runCode(loopLevel, "function spin() { " + body + " }");
+        const ms = Math.round(performance.now() - t0);
+        const text = JSON.stringify(r).slice(0, 400);
+        check("runCode зупиняє «" + body + "» (" + ms + " мс)", !r.pass && /безкінечн/i.test(text) && ms < 6000, text.slice(0, 160));
+      }
+      const finite = await Checker.runCode({ taskType: "write-function", functionName: "sum", testCases: [{ input: [4], expectedOutput: 6 }] },
+        "function sum(n) { let s = 0, i = 0; while (i < n) s += i++; for (let k = 0; k < 2; k++) ; return s; }");
+      check("звичайні цикли без дужок працюють і дають правильну відповідь", finite.pass, JSON.stringify(finite.results));
+
+      /* ---------- порівняння ---------- */
+      section("Порівняння масивів (deepEqual)");
+      const eq = Checker.deepEqual;
+      check("[] ≠ new Array(1)", !eq([], new Array(1)));
+      const sparse = [60]; sparse.length = 2;
+      check("[60] ≠ [60, <порожньо>]", !eq([60], sparse));
+      check("[undefined] ≠ [<порожньо>]", !eq([undefined], new Array(1)));
+      check("[1, [2, 3]] = [1, [2, 3]]", eq([1, [2, 3]], [1, [2, 3]]));
+      check("{ a: [1] } = { a: [1] }", eq({ a: [1] }, { a: [1] }));
+      check("show() позначає порожні позиції", Checker.show(sparse) === "[60, <порожньо>]", Checker.show(sparse));
+
+      section("Місія 35 «filter»: зайва порожня позиція не проходить");
+      const l35 = jsLevel(35);
+      const good = await Checker.runCode(l35, l35.solution);
+      check("еталонне рішення проходить", good.pass);
+      const bad = await Checker.runCode(l35, "function getBrightCrystals(brightness) {\n  const result = brightness.filter((value) => value > 50);\n  result.length += 1;\n  return result;\n}");
+      check("рішення з result.length += 1 не проходить", !bad.pass, bad.results.map((r) => r.pass).join(", "));
+
+      /* ---------- сховище ---------- */
+      section("Без доступу до localStorage");
+      const reports = [];
+      const done = new Promise((resolve) => {
+        window.addEventListener("message", (e) => {
+          if (!e.data || !e.data.storageProbe) return;
+          reports.push(e.data.storageProbe);
+          if (e.data.storageProbe.step === 2) resolve();
+        });
+        setTimeout(resolve, 8000);
+      });
+      const frame = document.createElement("iframe");
+      frame.style.display = "none";
+      frame.src = "storage-probe.html?step=1";
+      document.body.appendChild(frame);
+      await done;
+      frame.remove();
+      const s1 = reports.find((r) => r.step === 1), s2 = reports.find((r) => r.step === 2);
+      check("гра помічає, що зберігати на пристрої не можна", s1 && s1.persistent === false, JSON.stringify(s1));
+      check("місію зараховано, нараховано XP", s1 && s1.xp > 0 && s1.completedNow.includes(1), JSON.stringify(s1));
+      check("після переходу на іншу сторінку прогрес на місці", s2 && s2.completed.includes(1) && s2.xp > 0, JSON.stringify(s2));
+      check("друга місія відкрита", s2 && s2.level2Unlocked, JSON.stringify(s2));
+
+      /* ---------- звіт ---------- */
+      const all = groups.flatMap((g) => g.items);
+      const failed = all.filter((i) => !i.pass);
+      const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+      document.getElementById("summary").innerHTML = failed.length
+        ? '<span class="bad">Не пройшло ' + failed.length + " з " + all.length + "</span>"
+        : '<span class="ok">Усі ' + all.length + " модульних тестів пройдено ✓</span>";
+      document.getElementById("out").innerHTML = groups.map((g) => "<h2>" + esc(g.title) + "</h2><ul>" + g.items.map((i) =>
+        '<li class="' + (i.pass ? "ok" : "bad") + '">' + (i.pass ? "✓ " : "✗ ") + esc(i.name) + (!i.pass && i.detail ? " <code>" + esc(i.detail) + "</code>" : "") + "</li>").join("") + "</ul>").join("");
+    })();
+  </script>
+</body>
+</html>

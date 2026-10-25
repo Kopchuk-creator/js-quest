@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <title>JS Quest — перевірка без localStorage</title>
+  <script>
+    // Імітуємо браузер, що забороняє сайту зберігати дані: кожен виклик localStorage кидає помилку.
+    ["getItem", "setItem", "removeItem", "clear", "key"].forEach((m) => {
+      Storage.prototype[m] = function () { throw new DOMException("Доступ заборонено", "SecurityError"); };
+    });
+  </script>
+  <script src="../js/storage.js"></script>
+  <script src="../js/worlds.js"></script>
+  <script src="../js/levels.js"></script>
+  <script src="../js/levels-web.js"></script>
+  <script src="../js/game.js"></script>
+</head>
+<body>
+  <script>
+    // Крок 1: проходимо першу JS-місію й «переходимо на іншу сторінку» (нове завантаження).
+    // Крок 2: перевіряємо, що прогрес пережив перехід і друга місія відкрита.
+    const step = new URLSearchParams(location.search).get("step") || "1";
+    const api = Game.forWorld("js");
+    if (step === "1") {
+      window.name = "";
+      const outcome = api.completeLevel(1, true);
+      const report = { step: 1, persistent: GameStore.persistent, xp: outcome.xpGained, completedNow: api.load().completed };
+      parent.postMessage({ storageProbe: report }, "*");
+      location.href = "storage-probe.html?step=2";
+    } else {
+      const p = api.load();
+      parent.postMessage({ storageProbe: { step: 2, persistent: GameStore.persistent, completed: p.completed, xp: p.xp, level2Unlocked: api.isUnlocked(p, 2) } }, "*");
+    }
+  </script>
+</body>
+</html>

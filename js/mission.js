@@ -15,6 +15,7 @@
   const level = Game.getLevel(levelId);
 
   UI.renderSidebar($("#sidebar"), "practice", "../");
+  UI.warnStorage();
 
   if (!level) {
     main.innerHTML =
@@ -610,6 +611,8 @@
       GameStore.saveDraft(levelId, draftText());
     }
     const outcome = Game.completeLevel(levelId, firstTry);
+    // Без доступу до сховища місія зарахована лише в цій вкладці — нагадуємо про це.
+    UI.warnStorage(true);
 
     const text = outcome.alreadyDone
       ? "Усі перевірки пройдено. Повторення — мати навчання!"
