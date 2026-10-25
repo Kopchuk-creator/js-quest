@@ -273,6 +273,32 @@
           }
           g.ctx.globalAlpha = 1;
           break;
+        case "paint":
+          // Кольорові бризки фарби над фарбарнею.
+          for (let k = 0; k < 7; k++) {
+            const life = (time * 0.7 + k / 7) % 1;
+            g.ctx.globalAlpha = 1 - life;
+            g.r(x - 12 + k * 4 + Math.sin(life * 7 + k) * 2, top + 6 - life * 14, 2, 2, ["#e0503c", "#f7a33a", "#f7d23a", "#5aa843", "#3f78b5", "#ff8fc0", "#62d8ff"][k]);
+          }
+          g.ctx.globalAlpha = 1;
+          break;
+        case "lighthouse":
+          // Промінь маяка обертається, коли маяк добудовано.
+          if (progress < 1) return drawEffect(g, id, "sparkle", x, y, time, progress);
+          {
+            const a = time * 1.2;
+            const len = 120;
+            g.ctx.globalAlpha = gentle() ? 0.12 : 0.22;
+            g.ctx.fillStyle = "#fff2a8";
+            g.ctx.beginPath();
+            g.ctx.moveTo(x, top + 2);
+            g.ctx.lineTo(x + Math.cos(a - 0.12) * len, top + 2 + Math.sin(a - 0.12) * len * 0.5);
+            g.ctx.lineTo(x + Math.cos(a + 0.12) * len, top + 2 + Math.sin(a + 0.12) * len * 0.5);
+            g.ctx.closePath();
+            g.ctx.fill();
+            g.ctx.globalAlpha = 1;
+          }
+          break;
         case "beam":
           // Промінь святилища — лише коли його активовано; до того руни лише іскрять.
           if (progress < 1) return drawEffect(g, id, "sparkle", x, y, time, progress);
