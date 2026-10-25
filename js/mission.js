@@ -13,6 +13,7 @@
   const params = new URLSearchParams(location.search);
   const levelId = Number(params.get("id")) || 1;
   const level = Game.getLevel(levelId);
+  document.title = level ? "Кодомандри — " + level.title : "Кодомандри — місію не знайдено";
 
   UI.renderSidebar($("#sidebar"), "practice", "../");
   UI.warnStorage();
