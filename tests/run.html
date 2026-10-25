@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JS Quest — автоперевірка рівнів</title>
+  <style>
+    body { background: #111213; color: #f3f2ee; font: 14px/1.5 system-ui, sans-serif; margin: 24px; }
+    h1 { font-size: 22px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border-bottom: 1px solid #2d2e33; padding: 6px 8px; text-align: left; vertical-align: top; }
+    .ok { color: #5ee0a0; } .bad { color: #ff8a76; font-weight: 700; }
+    code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: #a8aab0; }
+  </style>
+</head>
+<body>
+  <h1>Автоперевірка рівнів</h1>
+  <p>Для кожного рівня: еталонне рішення має пройти перевірку, а стартовий код (там, де він є) — ні. Для predict-output / multiple-choice / fill-blank перевіряється правильна і неправильна відповідь.</p>
+  <p id="summary">Перевіряю…</p>
+  <table><thead><tr><th>#</th><th>Рівень</th><th>Тип</th><th>Рішення</th><th>Стартовий код / хибна відповідь</th></tr></thead><tbody id="rows"></tbody></table>
+
+  <script src="../js/levels.js"></script>
+  <script src="../js/checker.js"></script>
+  <script>
+    (async function () {
+      const rows = document.getElementById("rows");
+      const failures = [];
+      const fmt = (r) => r.results.filter((x) => !x.pass).map((x) => x.name + ": " + (x.actual || "") + (x.message ? " — " + x.message : "")).concat(
+        r.codeChecks.filter((c) => !c.pass).map((c) => "codeCheck: " + c.label),
+        r.error ? ["error: " + r.error.title] : []
+      ).join("; ");
+
+      for (const level of window.LEVELS) {
+        let good = "", bad = "", okGood = true, okBad = true;
+        if (level.taskType === "write-function" || level.taskType === "fix-code") {
+          const r1 = await Checker.runCode(level, level.solution);
+          okGood = r1.pass;
+          good = r1.pass ? "✓ " + r1.results.length + " тестів" : "✗ " + fmt(r1);
+          if (level.starterCode) {
+            const r2 = await Checker.runCode(level, level.starterCode);
+            okBad = !r2.pass;
+            bad = r2.pass ? "✗ стартовий код уже проходить!" : "✓ не проходить (" + r2.results.filter((x) => x.pass).length + "/" + r2.results.length + " тестів)";
+          }
+        } else if (level.taskType === "predict-output") {
+          okGood = Checker.checkPredict(level, level.expectedAnswer).pass;
+          okBad = !Checker.checkPredict(level, level.expectedAnswer.map(() => "???")).pass;
+          // Відповіді з лапками та іншим регістром теж приймаються.
+          okGood = okGood && Checker.checkPredict(level, level.expectedAnswer.map((a) => '"' + a.toUpperCase() + '"')).pass;
+          good = okGood ? "✓" : "✗"; bad = okBad ? "✓" : "✗";
+        } else if (level.taskType === "multiple-choice") {
+          okGood = Checker.checkChoice(level, level.expectedAnswer).pass;
+          okBad = !Checker.checkChoice(level, level.options.find((o) => o !== level.expectedAnswer)).pass;
+          good = okGood ? "✓" : "✗"; bad = okBad ? "✓" : "✗";
+        } else if (level.taskType === "fill-blank") {
+          okGood = Checker.checkBlank(level, level.expectedAnswer.map((a) => " " + a[0] + " ")).pass;
+          okBad = !Checker.checkBlank(level, level.expectedAnswer.map(() => "typeOf")).pass;
+          good = okGood ? "✓" : "✗"; bad = okBad ? "✓" : "✗";
+        }
+        if (!okGood || !okBad) failures.push(level.id);
+        const tr = document.createElement("tr");
+        tr.innerHTML = "<td>" + level.id + "</td><td>" + level.title + "</td><td><code>" + level.taskType + "</code></td>" +
+          '<td class="' + (okGood ? "ok" : "bad") + '">' + good + "</td>" +
+          '<td class="' + (okBad ? "ok" : "bad") + '">' + bad + "</td>";
+        rows.appendChild(tr);
+      }
+      const summary = failures.length ? "Проблеми в рівнях: " + failures.join(", ") : "Усі " + window.LEVELS.length + " рівнів пройшли автоперевірку ✓";
+      document.getElementById("summary").textContent = summary;
+      document.getElementById("summary").className = failures.length ? "bad" : "ok";
+      window.__testSummary = { failures, total: window.LEVELS.length };
+    })();
+  </script>
+</body>
+</html>

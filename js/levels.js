@@ -3941,7 +3941,9 @@ console.log("кінець");`,
       {
         name: "Помилка перетворюється на повідомлення",
         async check(ctx) {
-          const result = await ctx.fn(Promise.reject(new Error("сходинка зламалась")));
+          const rejected = Promise.reject(new Error("сходинка зламалась"));
+          rejected.catch(() => {}); // щоб недописаний код не лишав «Uncaught (in promise)»
+          const result = await ctx.fn(rejected);
           return { pass: result === "Падіння: сходинка зламалась", actual: ctx.show(result), expected: "\"Падіння: сходинка зламалась\"" };
         },
       },
@@ -3989,8 +3991,10 @@ loadData()
         async check(ctx) {
           const beacon = { lit: false };
           let caught = null;
+          const rejected = Promise.reject(new Error("закляття зірвалось"));
+          rejected.catch(() => {}); // щоб недописаний код не лишав «Uncaught (in promise)»
           try {
-            await ctx.fn(Promise.reject(new Error("закляття зірвалось")), beacon);
+            await ctx.fn(rejected, beacon);
           } catch (error) {
             caught = error.message;
           }
@@ -4445,7 +4449,7 @@ console.log(calcHeal(80));      // 50`,
       },
     ],
     module: true,
-    exports: ["calcDamage", "calcHeal", "SECRET_FORMULA"],
+    exports: ["calcDamage", "calcHeal"],
     fileName: "combat.js",
     starterCode: `function calcDamage(power, multiplier) {
   return power * multiplier;

@@ -898,12 +898,12 @@
     return "rgb(" + A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(",") + ")";
   }
 
-  function drawBackdrop(g, locId, solvedAll) {
+  function drawBackdrop(g, locId, solvedAll, H) {
     const biome = BIOMES[locId];
     let sky = biome.sky;
     if (locId === 10 && solvedAll) sky = ["#7fc3ec", "#e2f2fa"];
     const bands = 8;
-    const horizon = 92;
+    const horizon = H - 36;
     for (let i = 0; i < bands; i++) {
       g.r(0, Math.floor((i * horizon) / bands), SCENE_W, Math.ceil(horizon / bands) + 1, lerpColor(sky[0], sky[1], i / (bands - 1)));
     }
@@ -955,14 +955,14 @@
       g.ellipse(150, 24, 16, 5, cloud);
     }
     // Земля.
-    g.r(0, horizon, SCENE_W, SCENE_H - horizon, biome.ground[0]);
+    g.r(0, horizon, SCENE_W, H - horizon, biome.ground[0]);
     for (let i = 0; i < 160; i++) {
-      g.p(hash(i, 10, seed) * SCENE_W, horizon + hash(i, 11, seed) * (SCENE_H - horizon), biome.ground[1]);
+      g.p(hash(i, 10, seed) * SCENE_W, horizon + hash(i, 11, seed) * (H - horizon), biome.ground[1]);
     }
     if (biome.hills === "chasm") {
-      g.r(96, horizon, 52, SCENE_H - horizon, "#1c2430");
-      g.r(96, horizon, 2, SCENE_H - horizon, "#11161e");
-      g.r(146, horizon, 2, SCENE_H - horizon, "#11161e");
+      g.r(96, horizon, 52, H - horizon, "#1c2430");
+      g.r(96, horizon, 2, H - horizon, "#11161e");
+      g.r(146, horizon, 2, H - horizon, "#11161e");
     }
     g.r(0, horizon, SCENE_W, 1, lerpColor(biome.ground[0], "#ffffff", 0.2));
   }
@@ -974,24 +974,27 @@
   function renderScene(canvas, locId, progress, opts) {
     const o = opts || {};
     canvas.width = SCENE_W;
-    canvas.height = SCENE_H;
+    // Висоту сцени можна збільшити (більше неба) — усе прив'язано до низу.
+    const H = Math.max(SCENE_H, Math.round(o.height || SCENE_H));
+    const dy = H - SCENE_H;
+    canvas.height = H;
     const g = painter(canvas);
-    drawBackdrop(g, locId, progress >= 1);
+    drawBackdrop(g, locId, progress >= 1, H);
     const lm = landmark(locId, progress, o.frame || 0, false);
     const scale = Math.max(1, Math.min(3, Math.floor(104 / lm.height), Math.floor(118 / lm.width)));
     const lx = 124 - (lm.width * scale) / 2;
-    const ly = (locId === 10 ? 70 : 104) - lm.height * scale;
+    const ly = (locId === 10 ? 70 : 104) + dy - lm.height * scale;
     if (locId === 10) {
       // На вершині вежі під хмарою видно дах вежі.
-      g.r(84, 92, 80, 36, "#6d737c");
-      for (let x = 84; x < 164; x += 8) g.r(x, 86, 5, 6, "#6d737c");
-      g.r(84, 92, 80, 2, "#9aa1a9");
+      g.r(84, 92 + dy, 80, 36, "#6d737c");
+      for (let x = 84; x < 164; x += 8) g.r(x, 86 + dy, 5, 6, "#6d737c");
+      g.r(84, 92 + dy, 80, 2, "#9aa1a9");
     }
     g.sprite(lm, lx, ly, scale);
     if (o.hero !== false) {
       const hero = Art.hero();
       const bob = (o.frame || 0) % 2;
-      g.sprite(hero, 26, 112 - hero.height * 2 - bob, 2);
+      g.sprite(hero, 26, 112 + dy - hero.height * 2 - bob, 2);
     }
     if (o.sparkle != null) {
       const t = o.sparkle;
@@ -999,7 +1002,7 @@
         const a = hash(i, 12, 3) * Math.PI * 2;
         const r = 10 + t * (30 + hash(i, 13, 3) * 40);
         const x = 124 + Math.cos(a) * r;
-        const y = 60 + Math.sin(a) * r * 0.7 - t * 10;
+        const y = 60 + dy + Math.sin(a) * r * 0.7 - t * 10;
         if (hash(i, 14, Math.floor(t * 10)) > 0.3) g.r(x, y, 2, 2, i % 3 ? "#f7d23a" : "#ffffff");
       }
     }

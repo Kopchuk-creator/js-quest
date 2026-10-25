@@ -381,19 +381,20 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 
 .mission {
   display: grid; gap: var(--s4) var(--s4); max-width: 1560px; margin: 0 auto;
-  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(0, 1.08fr);
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(340px, 0.95fr);
   grid-template-areas:
-    "head   head   scene"
-    "task   editor scene"
-    "task   editor result"
-    "console console console";
-  grid-template-rows: auto 1fr auto auto;
+    "head    head    side"
+    "task    editor  side"
+    "console console side";
+  grid-template-rows: auto auto 1fr;
+  align-items: start;
 }
 .m-head { grid-area: head; display: flex; flex-direction: column; gap: var(--s2); }
-.m-task { grid-area: task; }
-.m-editor { grid-area: editor; }
+.m-task { grid-area: task; align-self: stretch; }
+.m-editor { grid-area: editor; align-self: stretch; }
+.m-side { grid-area: side; display: flex; flex-direction: column; gap: var(--s4); position: sticky; top: var(--s4); }
 .m-scene { grid-area: scene; }
-.m-result { grid-area: result; }
+.result { grid-area: result; }
 .m-console { grid-area: console; }
 
 .crumbs { display: flex; align-items: center; gap: var(--s2); color: var(--text-muted); font-size: 14px; flex-wrap: wrap; }
@@ -415,7 +416,7 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 
 .m-task { padding: var(--s5); display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
 .mentor { display: flex; align-items: flex-start; gap: var(--s3); }
-.mentor canvas { width: 56px; height: 56px; flex: none; }
+.mentor-art { flex: none; }
 .mentor .bubble { flex: 1; font-size: 14px; color: var(--text); background: #f3eee2; color: #1d1a12; border: 0; }
 .mentor .bubble::after { left: -6px; right: auto; top: 18px; bottom: auto; background: #f3eee2; border: 0; }
 .mentor.is-error .bubble, .mentor.is-error .bubble::after { background: #ffe1d8; }
@@ -453,21 +454,33 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .tab .js-badge { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 4px; background: var(--yellow); color: var(--yellow-ink); font-size: 10px; font-weight: 800; font-family: var(--mono); }
 .tab.is-readonly .js-badge { background: var(--surface-3); color: var(--text-muted); }
 
-.editor { position: relative; display: grid; grid-template-columns: 52px minmax(0, 1fr); flex: 1; min-height: 300px; background: #141517; }
-.gutter {
-  padding: var(--s4) var(--s3) var(--s4) 0; text-align: right; color: var(--text-dim); font-family: var(--mono); font-size: 14px; line-height: 1.7;
-  border-right: 1px solid var(--border); user-select: none; white-space: pre; overflow: hidden;
+/* Редактор: textarea і підсвічений <pre> лежать в одній клітинці сітки,
+   тож мають однаковий розмір; прокручується весь .editor разом із номерами рядків. */
+.editor {
+  position: relative; display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: stretch;
+  flex: 1; min-height: 300px; max-height: 560px; overflow: auto; background: #141517;
 }
-.code-area { position: relative; overflow: auto; }
+.editor.is-readonly { min-height: 0; flex: none; }
+.gutter {
+  position: sticky; left: 0; z-index: 1; background: #141517;
+  padding: var(--s4) var(--s3) var(--s4) 0; text-align: right; color: var(--text-dim); font-family: var(--mono); font-size: 14px; line-height: 1.7;
+  border-right: 1px solid var(--border); user-select: none; white-space: pre;
+}
+.code-area { display: grid; min-width: 0; }
+.code-area > * { grid-area: 1 / 1; }
 .code-area pre, .code-area textarea {
   margin: 0; padding: var(--s4); font-family: var(--mono); font-size: 14px; line-height: 1.7; tab-size: 2;
-  white-space: pre; word-wrap: normal; border: 0; min-height: 100%;
+  white-space: pre; word-wrap: normal; overflow-wrap: normal; border: 0; letter-spacing: 0;
 }
 .code-area pre { pointer-events: none; color: #e6e4de; }
+/* <code> усередині редактора не повинен мати відступів: інакше текст зсувається відносно курсора textarea. */
+.code-area code, .code-block code, .option pre code { background: none; padding: 0; font-size: inherit; border-radius: 0; }
+.code-area pre.is-interactive { pointer-events: auto; }
 .code-area textarea {
-  position: absolute; inset: 0; width: 100%; height: 100%; resize: none; background: transparent; color: transparent;
+  width: 100%; height: 100%; resize: none; background: transparent; color: transparent;
   caret-color: var(--yellow); outline: none; overflow: hidden;
 }
+.mentor-art canvas { width: 56px; height: 56px; }
 .code-area textarea::selection { background: rgba(247, 210, 58, 0.25); color: transparent; }
 .code-area textarea:focus-visible { box-shadow: inset 0 0 0 2px rgba(247, 210, 58, 0.35); }
 
@@ -504,8 +517,8 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .option input { margin-top: 4px; accent-color: var(--yellow); width: 18px; height: 18px; flex: none; }
 .option pre { margin: 0; font-family: var(--mono); font-size: 14px; white-space: pre-wrap; }
 .option:has(input:checked) { border-color: var(--yellow); background: var(--yellow-soft); }
-.option.is-right { border-color: var(--mint); background: var(--mint-soft); }
-.option.is-wrong { border-color: var(--coral); background: var(--coral-soft); }
+.option.is-right, .option.is-right:has(input:checked) { border-color: var(--mint); background: var(--mint-soft); }
+.option.is-wrong, .option.is-wrong:has(input:checked) { border-color: var(--coral); background: var(--coral-soft); }
 
 .editor-actions { display: flex; gap: var(--s3); padding: var(--s3); border-top: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
 .editor-actions .btn-primary { min-width: 200px; font-size: 18px; min-height: 56px; }
@@ -513,8 +526,8 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .kbd-hint { margin-left: auto; align-self: center; color: var(--text-dim); font-size: 12px; }
 kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; }
 
-.m-scene { position: relative; overflow: hidden; border-radius: var(--r-lg); border: 1px solid var(--border); background: #0c0d0e; min-height: 260px; }
-.m-scene canvas { width: 100%; height: 100%; object-fit: cover; }
+.m-scene { position: relative; overflow: hidden; border-radius: var(--r-lg); border: 1px solid var(--border); background: #0c0d0e; }
+.m-scene canvas { width: 100%; height: auto; aspect-ratio: 192 / 176; }
 .xp-chip {
   position: absolute; top: var(--s4); right: var(--s4); display: inline-flex; align-items: center; gap: var(--s2);
   padding: 8px 14px; border-radius: var(--r); background: rgba(17, 18, 19, 0.85); border: 1px solid var(--border-strong);
@@ -531,8 +544,9 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
 
 .result {
   display: flex; align-items: center; gap: var(--s4); padding: var(--s4) var(--s5); border-radius: var(--r-lg);
-  border: 1px solid var(--border); background: var(--surface); min-height: 84px;
+  border: 1px solid var(--border); background: var(--surface); min-height: 84px; flex-wrap: wrap;
 }
+.result > div { flex: 1 1 200px; min-width: 0; }
 .result-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; flex: none; background: var(--surface-3); color: var(--text-dim); }
 .result-icon .icon { width: 26px; height: 26px; stroke-width: 3; }
 .result h2 { font-size: 20px; font-weight: 800; }
@@ -582,6 +596,7 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
       "console console";
     grid-template-rows: none;
   }
+  .m-side { display: contents; }
 }
 
 @media (max-width: 1100px) {
@@ -619,7 +634,6 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "head" "scene" "task" "editor" "result" "console";
   }
-  .m-scene { min-height: 0; aspect-ratio: 192 / 128; }
   .editor { min-height: 240px; }
   .editor-actions .btn { flex: 1; min-width: 0; }
   .kbd-hint { display: none; }
