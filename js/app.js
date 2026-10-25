@@ -591,7 +591,7 @@
     locZoom = 1;
     applyLocZoom();
     startLocFx(LOC_MOTES[(id - 1) % LOC_MOTES.length]);
-    document.title = "JS Quest — " + loc.name;
+    document.title = "Кодомандри — " + loc.name;
   }
 
   function plural(n, one, few, many) {
@@ -790,7 +790,7 @@
     if (view === "handbook") Handbook.render($("#handbook"), { root: "", world: Game.WORLD_ID });
     if (view === "trophies") renderProfile();
     if (view === "map") renderMap();
-    if (view !== "location") document.title = "JS Quest — " + TITLES[view];
+    if (view !== "location") document.title = "Кодомандри — " + TITLES[view];
   }
 
   function renderAll() {

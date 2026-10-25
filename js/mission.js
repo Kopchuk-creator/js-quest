@@ -255,18 +255,63 @@
       "</div>";
   }
 
-  // Зсуває ілюстрацію так, щоб диск місії id був у полі зору (трохи правіше центру — зліва стоїть герой).
+  /* Кадр сцени: диск місії id — у полі зору (ідеально трохи правіше центру, бо зліва стоїть
+     Мандрівник). На ілюстраціях уже намальований герой (sceneArt.hero), тож кадр підбираємо так,
+     щоб той або лишався за межами кадру, або повністю ховався за нашим Мандрівником —
+     у сцені завжди видно лише одного героя. */
   function focusScene(id) {
-    const box = $("#scene-art"), pan = $("#scene-pan");
+    const box = $("#scene-art"), pan = $("#scene-pan"), heroEl = $("#scene-hero");
     if (!box || !pan) return;
+    const a = sceneArt;
     const i = loc.levels.indexOf(id);
-    const n = sceneArt.nodes[i] || sceneArt.nodes[0];
+    const n = a.nodes[i] || a.nodes[0];
     const cw = box.clientWidth, ch = box.clientHeight;
     const pw = pan.offsetWidth, ph = pan.offsetHeight;
-    const tx = (n[0] / sceneArt.w) * pw, ty = ((n[1] - sceneArt.crop) / (sceneArt.h - sceneArt.crop)) * ph;
-    const left = Math.min(0, Math.max(cw - pw, cw * 0.6 - tx));
-    const top = Math.min(0, Math.max(ch - ph, ch * 0.42 - ty));
+    if (!cw || !pw) return;
+    const k = pw / a.w; // масштаб ілюстрації в сцені
+    const tx = n[0] * k, ty = (n[1] - a.crop) * k;
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+    const ideal = [clamp(cw * 0.6 - tx, cw - pw, 0), clamp(ch * 0.42 - ty, ch - ph, 0)];
+
+    // Непрозора частина нашого Мандрівника (без шарфа, що майорить ліворуч);
+    // shift — на скільки пікселів Мандрівника зсунуто праворуч від звичного місця.
+    if (heroEl) heroEl.style.marginLeft = "0px";
+    const base = heroEl && heroEl.offsetWidth ? { l: heroEl.offsetLeft, t: heroEl.offsetTop, w: heroEl.offsetWidth, h: heroEl.offsetHeight } : null;
+    const coverAt = (shift) => base && { x0: base.l + shift + base.w * 0.3, x1: base.l + shift + base.w * 0.9, y0: base.t + base.h * 0.12, y1: ch + 40 };
+    const painted = a.hero;
+    const ok = (left, top, cover) => {
+      // Диск місії видно й не закрито Мандрівником.
+      const dx = tx + left, dy = ty + top;
+      if (dx < cw * 0.08 || dx > cw * 0.94 || dy < ch * 0.08 || dy > ch * 0.9) return false;
+      if (cover && dx > cover.x0 - 4 && dx < cover.x1 + 4 && dy > cover.y0 - 3) return false;
+      if (!painted) return true;
+      // Видима частина намальованого героя: порожня або повністю за Мандрівником.
+      const x0 = Math.max(0, painted[0] * k + left), x1 = Math.min(cw, painted[2] * k + left);
+      const y0 = Math.max(0, (painted[1] - a.crop) * k + top), y1 = Math.min(ch, (painted[3] - a.crop) * k + top);
+      if (x1 <= x0 || y1 <= y0) return true;
+      return !!cover && x0 >= cover.x0 && x1 <= cover.x1 && y0 >= cover.y0 && y1 <= cover.y1;
+    };
+
+    let best = null;
+    if (ok(ideal[0], ideal[1], coverAt(0))) best = [ideal[0], ideal[1], 0];
+    else {
+      // Перебираємо кадри (і невеликий зсув Мандрівника) й беремо найближчий до ідеального,
+      // що проходить перевірку. Зсув Мандрівника «коштує» дорожче, ніж зсув кадру.
+      let bestCost = Infinity;
+      const step = Math.max(2, Math.round(cw / 140));
+      for (const shift of [0, -0.04, -0.08, 0.06, 0.12, 0.18, 0.24].map((f) => Math.round(f * cw))) {
+        const cover = coverAt(shift);
+        for (let left = 0; left >= cw - pw; left -= step) {
+          for (let top = 0; top >= ch - ph; top -= step) {
+            const cost = Math.hypot(left - ideal[0], top - ideal[1]) + Math.abs(shift) * 1.5;
+            if (cost < bestCost && ok(left, top, cover)) { bestCost = cost; best = [left, top, shift]; }
+          }
+        }
+      }
+    }
+    const [left, top, shift] = best || [ideal[0], ideal[1], 0];
     pan.style.transform = "translate(" + Math.round(left) + "px," + Math.round(top) + "px)";
+    if (heroEl) heroEl.style.marginLeft = shift + "px";
   }
 
   // Місію пройдено: диск стає зеленим, герой радіє, а погляд переходить до наступної місії локації.

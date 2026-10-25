@@ -9,42 +9,44 @@
    nodes  — центри дисків для місій локації, по порядку проходження
             (у координатах ілюстрації; кількість = кількість рівнів)
    trophy — точка, де з'являється трофей локації (необов'язково)
+   hero   — рамка героя, намальованого на ілюстрації (x0, y0, x1, y1): у сцені місії
+            камера ховає його за нашим Мандрівником або за межами кадру
    ========================================================= */
 window.LOCATION_ART = window.LOCATION_ART || {};
 
 window.LOCATION_ART.js = {
   1: {
-    src: "assets/locations/js-1.webp", w: 1586, h: 992, crop: 70,
+    src: "assets/locations/js-1.webp", w: 1586, h: 992, crop: 70, hero: [145, 735, 245, 855],
     nodes: [[387, 652], [469, 556], [405, 472], [468, 404], [598, 347], [762, 297], [1205, 301], [1358, 262], [1318, 394], [1407, 540]],
     trophy: [1318, 642],
   },
   2: {
-    src: "assets/locations/js-2.webp", w: 1586, h: 992, crop: 70,
+    src: "assets/locations/js-2.webp", w: 1586, h: 992, crop: 70, hero: [165, 678, 260, 830],
     nodes: [[328, 766], [441, 671], [493, 462], [462, 229], [828, 578], [995, 307]],
     trophy: [1373, 240],
   },
   3: {
-    src: "assets/locations/js-3.webp", w: 1586, h: 992, crop: 76,
+    src: "assets/locations/js-3.webp", w: 1586, h: 992, crop: 76, hero: [180, 686, 282, 818],
     nodes: [[358, 697], [442, 524], [560, 410], [670, 312], [893, 268], [1302, 322], [1350, 447], [1322, 566], [1235, 690]],
     trophy: [905, 545],
   },
   4: {
-    src: "assets/locations/js-4.webp", w: 1586, h: 992, crop: 76,
+    src: "assets/locations/js-4.webp", w: 1586, h: 992, crop: 76, hero: [85, 688, 192, 812],
     nodes: [[178, 665], [296, 622], [365, 545], [321, 452], [382, 366], [688, 466], [797, 505], [926, 474], [1060, 520], [1203, 512], [1298, 469], [1393, 415], [1436, 343]],
     trophy: [1462, 262],
   },
   5: {
-    src: "assets/locations/js-5.webp", w: 1586, h: 992, crop: 72,
+    src: "assets/locations/js-5.webp", w: 1586, h: 992, crop: 72, hero: [725, 778, 820, 900],
     nodes: [[545, 795], [412, 451], [577, 268], [802, 400], [1062, 268], [1188, 450], [803, 642]],
     trophy: [802, 260],
   },
   6: {
-    src: "assets/locations/js-6.webp", w: 1586, h: 992, crop: 76,
+    src: "assets/locations/js-6.webp", w: 1586, h: 992, crop: 76, hero: [183, 650, 270, 786],
     nodes: [[312, 735], [538, 508], [757, 347], [1065, 428], [1325, 300], [1268, 611], [785, 600]],
     trophy: [1430, 240],
   },
   7: {
-    src: "assets/locations/js-7.webp", w: 1672, h: 941, crop: 66,
+    src: "assets/locations/js-7.webp", w: 1672, h: 941, crop: 66, hero: [90, 683, 203, 830],
     nodes: [
       [213, 648], [478, 672], [580, 657], [680, 646], [780, 637], [885, 630], [985, 623], [1088, 600], [1170, 560], [1225, 510],
       [1245, 450], [1220, 395], [1170, 355], [1060, 340], [960, 330], [865, 318], [1000, 270], [1140, 250], [1260, 230], [1350, 205],
@@ -53,21 +55,21 @@ window.LOCATION_ART.js = {
     trophy: [1460, 70],
   },
   8: {
-    src: "assets/locations/js-8.webp", w: 1586, h: 992, crop: 70,
+    src: "assets/locations/js-8.webp", w: 1586, h: 992, crop: 70, hero: [735, 812, 824, 920],
     nodes: [[797, 720], [353, 476], [800, 285], [1305, 476]],
     trophy: [800, 200],
   },
   9: {
-    src: "assets/locations/js-9.webp", w: 1122, h: 1402, crop: 70,
+    src: "assets/locations/js-9.webp", w: 1122, h: 1402, crop: 70, hero: [170, 1160, 258, 1280],
     nodes: [[520, 1172], [517, 1068], [517, 958], [517, 860], [517, 740], [517, 637], [517, 530], [517, 430], [517, 345], [517, 268], [517, 226]],
   },
   10: {
-    src: "assets/locations/js-10.webp", w: 1586, h: 992, crop: 76,
+    src: "assets/locations/js-10.webp", w: 1586, h: 992, crop: 76, hero: [205, 625, 310, 760],
     nodes: [[378, 672], [800, 345], [1340, 580]],
     trophy: [1395, 330],
   },
   11: {
-    src: "assets/locations/js-11.webp", w: 1585, h: 992, crop: 70,
+    src: "assets/locations/js-11.webp", w: 1585, h: 992, crop: 70, hero: [155, 678, 270, 858],
     nodes: [[755, 765], [880, 455], [915, 232]],
     trophy: [915, 150],
   },
@@ -76,62 +78,62 @@ window.LOCATION_ART.js = {
 // Світ HTML/CSS: ілюстрації без верхньої смуги, тож crop: 0.
 window.LOCATION_ART.web = {
   1: {
-    src: "assets/locations/web-1.webp", w: 1586, h: 992, crop: 0,
+    src: "assets/locations/web-1.webp", w: 1586, h: 992, crop: 0, hero: [155, 728, 244, 860],
     nodes: [[424, 715], [590, 632], [763, 546], [1021, 476], [1249, 368], [1345, 248]],
     trophy: [1395, 205],
   },
   2: {
-    src: "assets/locations/web-2.webp", w: 1586, h: 992, crop: 0,
+    src: "assets/locations/web-2.webp", w: 1586, h: 992, crop: 0, hero: [125, 738, 226, 892],
     nodes: [[343, 736], [619, 596], [856, 463], [1128, 356], [1303, 243]],
     trophy: [1345, 195],
   },
   3: {
-    src: "assets/locations/web-3.webp", w: 1586, h: 992, crop: 0,
+    src: "assets/locations/web-3.webp", w: 1586, h: 992, crop: 0, hero: [118, 720, 220, 862],
     nodes: [[357, 743], [582, 655], [813, 563], [1080, 488], [1250, 408]],
     trophy: [1300, 360],
   },
   4: {
-    src: "assets/locations/web-4.webp", w: 1586, h: 992, crop: 0,
+    src: "assets/locations/web-4.webp", w: 1586, h: 992, crop: 0, hero: [148, 722, 247, 850],
     nodes: [[367, 740], [588, 603], [995, 395], [1153, 303], [1297, 205]],
     trophy: [1345, 150],
   },
   5: {
-    src: "assets/locations/web-5.webp", w: 1586, h: 992, crop: 0,
+    src: "assets/locations/web-5.webp", w: 1586, h: 992, crop: 0, hero: [118, 725, 230, 868],
     nodes: [[348, 750], [604, 598], [828, 485], [1168, 337], [1302, 282]],
     trophy: [1440, 255],
   },
   6: {
-    src: "assets/locations/web-6.webp", w: 1586, h: 992, crop: 0,
+    src: "assets/locations/web-6.webp", w: 1586, h: 992, crop: 0, hero: [120, 728, 240, 882],
     nodes: [[345, 742], [686, 541], [1006, 406], [1300, 276]],
     trophy: [1380, 235],
   },
   7: {
-    src: "assets/locations/web-7.webp", w: 1586, h: 992, crop: 0,
+    src: "assets/locations/web-7.webp", w: 1586, h: 992, crop: 0, hero: [140, 720, 240, 852],
     nodes: [[306, 680], [549, 535], [828, 449], [1066, 365], [1315, 287]],
     trophy: [1350, 225],
   },
   8: {
-    src: "assets/locations/web-8.webp", w: 1586, h: 992, crop: 0,
+    src: "assets/locations/web-8.webp", w: 1586, h: 992, crop: 0, hero: [150, 738, 260, 880],
     nodes: [[384, 802], [754, 487], [1046, 351], [1283, 245]],
     trophy: [1300, 190],
   },
   9: {
-    src: "assets/locations/web-9.webp", w: 1586, h: 992, crop: 0,
+    src: "assets/locations/web-9.webp", w: 1586, h: 992, crop: 0, hero: [124, 732, 237, 880],
     nodes: [[341, 742], [680, 547], [983, 411], [1274, 287]],
     trophy: [1335, 238],
   },
   10: {
-    src: "assets/locations/web-10.webp", w: 1586, h: 992, crop: 0,
+    src: "assets/locations/web-10.webp", w: 1586, h: 992, crop: 0, hero: [100, 734, 213, 876],
     nodes: [[431, 718], [846, 471], [1271, 220]],
     trophy: [1320, 185],
   },
   11: {
-    src: "assets/locations/web-11.webp", w: 1586, h: 992, crop: 0,
+    src: "assets/locations/web-11.webp", w: 1586, h: 992, crop: 0, hero: [158, 740, 257, 872],
     nodes: [[411, 775], [722, 623], [1001, 524], [1223, 417]],
     trophy: [1300, 385],
   },
   12: {
-    src: "assets/locations/web-12.webp", w: 1586, h: 992, crop: 0,
+    src: "assets/locations/web-12.webp", w: 1586, h: 992, crop: 0, hero: [154, 755, 256, 884],
     nodes: [[345, 788], [832, 587], [1164, 453]],
     trophy: [1210, 418],
   },
