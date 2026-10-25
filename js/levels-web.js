@@ -1,2207 +1,881 @@
 /* =========================================================
    levels-web.js — світ «Острів будівельників»: HTML і CSS.
-   8 локацій, 60 рівнів.
+   12 локацій, 53 рівні — за планом поглиблення HTML/CSS
+   (основи вже відомі, тож рівні ближчі до реальної роботи).
 
-   Нові типи завдань:
-     write-markup — зверстати сторінку (index.html і/або style.css)
+   Типи завдань:
+     write-markup — зверстати (index.html і/або style.css)
      fix-markup   — виправити верстку
-   starterHtml / starterCss — стартові файли (null — файлу в завданні немає)
+   starterHtml / starterCss — стартові файли (null — файлу немає)
    solution: { html, css } — еталон для tests/run.html
    testCases[].check(ctx) — перевірка на справжньому рендері сторінки:
      ctx.$ / ctx.$$ / ctx.text / ctx.attr — DOM
-     ctx.style(el, "prop") — обчислений стиль, ctx.rect(el) — розміри
+     ctx.style(el, "prop", pseudo) — обчислений стиль, ctx.rect(el) — розміри
      ctx.color("gold") — колір у форматі getComputedStyle
-     ctx.rules(":hover") — CSS-правила, ctx.setWidth(px) — ширина вікна
+     ctx.rules(/…/) — CSS-правила, ctx.atRules("CSSFontFaceRule"), ctx.keyframes(name)
+     ctx.transform(el) — кут, масштаб і зсув transform
+     ctx.contrast(el) — контраст тексту з фоном (WCAG)
      ctx.lint() — попередження про незакриті теги
-   testCases[].width — ширина вікна для тесту (за замовчуванням 800)
+   testCases[].width — ширина вікна для тесту (за замовчуванням 800, висота 600)
+   Кожен тест рендерить сторінку заново, тож зміни DOM у тесті не впливають на інші.
    codeChecks[].in — "html" або "css" (за замовчуванням обидва файли)
    ========================================================= */
 (function () {
   "use strict";
 
+  /* ---------- помічники для тестів ---------- */
+
   // Порівняння з допуском у пікселях (рендер може давати дробові значення).
   const near = (a, b, tol) => Math.abs(a - b) <= (tol === undefined ? 1.5 : tol);
   const eq = (ctx, actual, expected) => ({ pass: actual === expected, actual: ctx.show(actual), expected: ctx.show(expected) });
   const px = (n) => Math.round(n) + "px";
+  // Значення властивості з першого CSS-правила, чий селектор підходить під вираз.
+  const ruleProp = (ctx, re, prop) => {
+    const r = ctx.rules(re)[0];
+    return r ? r.rule.style.getPropertyValue(prop).trim() : "";
+  };
+  // Скільки елементів стоїть у першому рядку.
+  const perRow = (ctx, sel) => {
+    const r = ctx.$$(sel).map((e) => ctx.rect(e));
+    return r.filter((x) => near(x.top, r[0].top)).length;
+  };
+  const labelOf = (ctx, sel) => {
+    const el = ctx.$(sel);
+    return el && el.labels && el.labels.length ? ctx.text(el.labels[0]) : null;
+  };
 
   const LOCATIONS = [
-    { id: 1, name: "Причал тегів",        arcs: [1], event: "Причал відбудовано — кораблі з тегами пришвартовуються",        trophy: { name: "Цеглина-тег",       icon: "brick" } },
-    { id: 2, name: "Квартал семантики",   arcs: [2], event: "Квартал отримав вивіски — кожен дім знає своє призначення",   trophy: { name: "Вивіска гільдії",   icon: "sign" } },
-    { id: 3, name: "Ринок форм",          arcs: [3], event: "Ринок відкрито — торговці приймають замовлення",              trophy: { name: "Перо писаря",       icon: "quill" } },
-    { id: 4, name: "Фарбарня селекторів", arcs: [4], event: "Фарбарня розфарбувала острів у яскраві кольори",              trophy: { name: "Чарівний пензель",  icon: "brush" } },
-    { id: 5, name: "Кузня коробок",       arcs: [5], event: "Кузня викувала міцні рамки для всіх будинків",                trophy: { name: "Скриня меж",        icon: "crate" } },
-    { id: 6, name: "Флекс-доки",          arcs: [6], event: "Доки вишикувано в ідеальну лінію",                            trophy: { name: "Якір флексу",       icon: "anchor" } },
-    { id: 7, name: "Гридбург",            arcs: [7], event: "Гридбург розплановано — місто стоїть рівними кварталами",     trophy: { name: "Креслення сітки",   icon: "blueprint" } },
-    { id: 8, name: "Маяк адаптивності",   arcs: [8], event: "Маяк засяяв — острів видно з будь-якого екрана",              trophy: { name: "Лінза маяка",       icon: "lens" } },
+    { id: 1,  name: "Квартал семантики",       arcs: [1],  event: "Квартал отримав вивіски — кожен дім знає своє призначення",  trophy: { name: "Вивіска гільдії",     icon: "sign" } },
+    { id: 2,  name: "Фарбарня селекторів",     arcs: [2],  event: "Фарбарня розфарбувала острів — кожен стиль лягає куди треба", trophy: { name: "Чарівний пензель",    icon: "brush" } },
+    { id: 3,  name: "Флекс-доки",              arcs: [3],  event: "Доки вишикувано в ідеальну лінію",                            trophy: { name: "Якір флексу",         icon: "anchor" } },
+    { id: 4,  name: "Гридбург",                arcs: [4],  event: "Гридбург розплановано — місто стоїть рівними кварталами",     trophy: { name: "Креслення сітки",     icon: "blueprint" } },
+    { id: 5,  name: "Маяк адаптивності",       arcs: [5],  event: "Маяк засяяв — острів видно з будь-якого екрана",              trophy: { name: "Лінза маяка",         icon: "lens" } },
+    { id: 6,  name: "Палітрова майстерня",     arcs: [6],  event: "Майстерня змішала палітру — острів міняє тему одним рухом",   trophy: { name: "Палітра майстра",     icon: "palette" } },
+    { id: 7,  name: "Ярмарок анімацій",        arcs: [7],  event: "Ярмарок ожив — каруселі крутяться, кулі злітають",            trophy: { name: "Повітряна куля",      icon: "balloon" } },
+    { id: 8,  name: "Сад доступності",         arcs: [8],  event: "Сад відкрито для кожного гостя острова",                       trophy: { name: "Квітка доступності",  icon: "flower" } },
+    { id: 9,  name: "Вітряки швидкості",       arcs: [9],  event: "Вітряки розкрутились — острів вантажиться миттєво",           trophy: { name: "Блискавка швидкості", icon: "bolt" } },
+    { id: 10, name: "Бібліотека порядку",      arcs: [10], event: "Бібліотеку впорядковано — кожен клас на своїй полиці",         trophy: { name: "Книга порядку",       icon: "book" } },
+    { id: 11, name: "Обсерваторія нового CSS", arcs: [11], event: "Обсерваторія відкрила нові зірки сучасного CSS",              trophy: { name: "Зірка обсерваторії",  icon: "star" } },
+    { id: 12, name: "Гранд-готель «Люм'єр»",   arcs: [12], event: "Гранд-готель відчинив двері — острів будівельників завершено!", trophy: { name: "Дзвоник рецепції",  icon: "bell" } },
   ];
 
-  const A1 = { arc: "Основи HTML", arcNumber: 1, locationName: "Причал тегів" };
-  const A2 = { arc: "Семантична розмітка", arcNumber: 2, locationName: "Квартал семантики" };
-  const A3 = { arc: "Форми", arcNumber: 3, locationName: "Ринок форм" };
-  const A4 = { arc: "Основи CSS", arcNumber: 4, locationName: "Фарбарня селекторів" };
-  const A5 = { arc: "Блокова модель", arcNumber: 5, locationName: "Кузня коробок" };
-  const A6 = { arc: "Flexbox", arcNumber: 6, locationName: "Флекс-доки" };
-  const A7 = { arc: "CSS Grid", arcNumber: 7, locationName: "Гридбург" };
-  const A8 = { arc: "Адаптивність і фінал", arcNumber: 8, locationName: "Маяк адаптивності" };
+  const ARC_NAMES = [
+    "Семантика та структура", "CSS поглиблено: база", "Flexbox поглиблено", "CSS Grid",
+    "Адаптивний дизайн", "CSS-змінні", "Анімації та переходи", "Доступність (a11y)",
+    "Продуктивність", "Організація коду", "Сучасний CSS", "Практичні проєкти",
+  ];
+  // Рівень арки n: назва арки й локації підставляються автоматично.
+  const L = (n, data) => Object.assign({ arc: ARC_NAMES[n - 1], arcNumber: n, locationName: LOCATIONS[n - 1].name }, data);
 
   const LEVELS = [
-    /* ───────────── Причал тегів — основи HTML ───────────── */
-    Object.assign({}, A1, {
+    /* ───────────── 1. Квартал семантики — семантика та структура ───────────── */
+    L(1, {
       id: 1,
-      title: "Структура документа",
-      concept: "Кожна HTML-сторінка має скелет: `<!DOCTYPE html>` вмикає сучасний режим браузера, `<html>` — корінь, у `<head>` лежить службова інформація (кодування, `<title>` для вкладки), а в `<body>` — усе, що бачить відвідувач.",
-      example: `<!DOCTYPE html>
-<html lang="uk">
-  <head>
-    <meta charset="utf-8">
-    <title>Моя сторінка</title>
-  </head>
-  <body>
-    <p>Привіт, світе!</p>
-  </body>
-</html>`,
-      missionStory: "Острів будівельників лежить у руїнах. Майстер причалу дає перше креслення — але лише одне з чотирьох складено правильно.",
-      worldEvent: "На причалі встановили першу опору.",
-      taskType: "multiple-choice",
-      prompt: "Який скелет HTML-документа правильний?",
-      optionsLang: "html",
-      options: [
-        `<!DOCTYPE html>\n<html lang="uk">\n  <head>\n    <title>Причал</title>\n  </head>\n  <body>\n    <h1>Вітаємо!</h1>\n  </body>\n</html>`,
-        `<html>\n  <body>\n    <title>Причал</title>\n    <h1>Вітаємо!</h1>\n  </body>\n  <head></head>\n</html>`,
-        `<!DOCTYPE html>\n<head>\n  <html>\n    <h1>Вітаємо!</h1>\n  </html>\n</head>`,
-        `<!DOCTYPE html>\n<body>\n  <head><title>Причал</title></head>\n  <h1>Вітаємо!</h1>\n</body>`,
-      ],
-      expectedAnswer: `<!DOCTYPE html>\n<html lang="uk">\n  <head>\n    <title>Причал</title>\n  </head>\n  <body>\n    <h1>Вітаємо!</h1>\n  </body>\n</html>`,
-      hint: "`<head>` і `<body>` — сусіди всередині `<html>`, а `<title>` живе в `<head>`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A1, {
-      id: 2,
-      title: "Заголовки",
-      concept: "Заголовки `<h1>`–`<h6>` будують змістову ієрархію сторінки. `<h1>` — головний заголовок (зазвичай один на сторінку), `<h2>` — розділи, `<h3>` — підрозділи. Обирай рівень за змістом, а не за розміром шрифту.",
-      example: `<h1>Острів будівельників</h1>
-<h2>Причал</h2>
-<h3>Розклад</h3>`,
-      missionStory: "Над причалом треба вивісити табличку з назвою, а на складі — вказівники розділів.",
-      worldEvent: "Над причалом з'явилась велика вивіска.",
-      taskType: "write-markup",
-      prompt: "Додай заголовок `<h1>` з текстом «Причал тегів» і під ним два `<h2>`: «Розклад кораблів» та «Склад».",
-      starterHtml: `<!-- Додай заголовки тут -->
-`,
-      starterCss: null,
-      testCases: [
-        { name: "Є один h1 «Причал тегів»", check: (ctx) => eq(ctx, ctx.$$("h1").map((h) => h.textContent.trim()).join("|"), "Причал тегів") },
-        { name: "Два h2 у правильному порядку", check: (ctx) => eq(ctx, ctx.$$("h2").map((h) => h.textContent.trim()).join(" / "), "Розклад кораблів / Склад") },
-      ],
-      codeChecks: [{ re: /<h1>[\s\S]*<\/h1>/i, label: "Є заголовок h1", in: "html" }],
-      solution: { html: `<h1>Причал тегів</h1>
-<h2>Розклад кораблів</h2>
-<h2>Склад</h2>
-` },
-      hint: "Кожен заголовок — окремий тег: `<h2>Склад</h2>`. Не забудь закривальні теги.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A1, {
-      id: 3,
-      title: "Абзаци й перенесення",
-      concept: "Текст ділять на абзаци тегом `<p>`. Браузер ігнорує зайві пробіли й перенесення рядків у коді, тож для примусового перенесення всередині абзацу є порожній тег `<br>` (у нього немає закривального).",
-      example: `<p>Перший абзац.</p>
-<p>Рядок один<br>Рядок два</p>`,
-      missionStory: "Капітан диктує запис у журнал причалу. Журнал любить порядок: кожна думка — окремий абзац.",
-      worldEvent: "Журнал причалу заповнено охайними записами.",
-      taskType: "write-markup",
-      prompt: "Додай два абзаци. Перший: «Кораблі прибувають щоранку.» Другий: «Капітан: Остап» і з нового рядка (через `<br>`) «Вантаж: цеглини».",
-      starterHtml: `<h1>Журнал причалу</h1>
-`,
-      starterCss: null,
-      testCases: [
-        { name: "Є рівно два абзаци", check: (ctx) => eq(ctx, ctx.$$("p").length, 2) },
-        { name: "Перший абзац з правильним текстом", check: (ctx) => eq(ctx, ctx.$$("p")[0] ? ctx.text(ctx.$$("p")[0]) : null, "Кораблі прибувають щоранку.") },
-        {
-          name: "Другий абзац розділено тегом <br>",
-          check(ctx) {
-            const p = ctx.$$("p")[1];
-            const ok = !!p && !!p.querySelector("br") && p.innerHTML.replace(/\s+/g, " ").includes("Капітан: Остап") && p.textContent.includes("Вантаж: цеглини");
-            return { pass: ok, actual: p ? ctx.show(p.innerHTML.trim()) : "немає", expected: "\"Капітан: Остап<br>Вантаж: цеглини\"" };
-          },
-        },
-      ],
-      solution: { html: `<h1>Журнал причалу</h1>
-<p>Кораблі прибувають щоранку.</p>
-<p>Капітан: Остап<br>Вантаж: цеглини</p>
-` },
-      hint: "Другий абзац: `<p>Капітан: Остап<br>Вантаж: цеглини</p>`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A1, {
-      id: 4,
-      title: "Списки",
-      concept: "`<ul>` — маркований список (порядок не важливий), `<ol>` — нумерований (кроки, рейтинги). Кожен пункт — `<li>`. Списки можна вкладати один в одного: вкладений `<ul>` живе всередині `<li>`.",
-      example: `<ul>
-  <li>Цеглини</li>
-  <li>Дошки</li>
-</ul>
-<ol>
-  <li>Розвантажити</li>
-  <li>Перерахувати</li>
-</ol>`,
-      missionStory: "На склад прибув вантаж, а бригадир хоче інструкцію з розвантаження. Склади два списки.",
-      worldEvent: "Вантаж розкладено, інструкція висить на стіні складу.",
-      taskType: "write-markup",
-      prompt: "Створи маркований список вантажу (`ul`): «Цеглини», «Дошки», «Цвяхи». Під ним — нумерований список кроків (`ol`): «Пришвартуватись», «Розвантажити», «Перерахувати».",
-      starterHtml: `<h2>Вантаж</h2>
-
-<h2>Кроки</h2>
-`,
-      starterCss: null,
-      testCases: [
-        { name: "ul з трьома пунктами вантажу", check: (ctx) => eq(ctx, ctx.$$("ul > li").map((li) => li.textContent.trim()).join(", "), "Цеглини, Дошки, Цвяхи") },
-        { name: "ol з трьома кроками", check: (ctx) => eq(ctx, ctx.$$("ol > li").map((li) => li.textContent.trim()).join(", "), "Пришвартуватись, Розвантажити, Перерахувати") },
-      ],
-      solution: { html: `<h2>Вантаж</h2>
-<ul>
-  <li>Цеглини</li>
-  <li>Дошки</li>
-  <li>Цвяхи</li>
-</ul>
-<h2>Кроки</h2>
-<ol>
-  <li>Пришвартуватись</li>
-  <li>Розвантажити</li>
-  <li>Перерахувати</li>
-</ol>
-` },
-      hint: "Список — це обгортка `<ul>` або `<ol>`, а кожен пункт усередині — `<li>…</li>`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A1, {
-      id: 5,
-      title: "Посилання",
-      concept: "Посилання `<a href=\"…\">` веде на іншу сторінку, файл або місце на цій самій сторінці (`href=\"#id\"`). Для зовнішніх сайтів у новій вкладці додають `target=\"_blank\"` разом із `rel=\"noopener\"` — так нова вкладка не отримує доступу до твоєї.",
-      example: `<a href="https://developer.mozilla.org/uk/" target="_blank" rel="noopener">MDN</a>
-<a href="#contacts">До контактів</a>
-<section id="contacts">…</section>`,
-      missionStory: "Причалу потрібні вказівники: один веде до великої бібліотеки знань за морем, інший — до розкладу на цій же дошці.",
-      worldEvent: "На причалі стоять вказівники в усі боки.",
-      taskType: "write-markup",
-      prompt: "Додай посилання «Довідник MDN» на `https://developer.mozilla.org/uk/`, що відкривається в новій вкладці (`target=\"_blank\"`, `rel=\"noopener\"`). І посилання «До розкладу», що веде на секцію з `id=\"schedule\"` на цій сторінці.",
-      starterHtml: `<nav>
-  <!-- посилання тут -->
-</nav>
-
-<section id="schedule">
-  <h2>Розклад кораблів</h2>
-</section>
-`,
-      starterCss: null,
-      testCases: [
-        {
-          name: "Зовнішнє посилання на MDN у новій вкладці",
-          check(ctx) {
-            const a = ctx.$('a[href="https://developer.mozilla.org/uk/"]');
-            const ok = !!a && a.textContent.trim() === "Довідник MDN" && a.getAttribute("target") === "_blank" && /noopener/.test(a.getAttribute("rel") || "");
-            return { pass: ok, actual: a ? ctx.show(a.outerHTML) : "посилання не знайдено", expected: '<a href="https://developer.mozilla.org/uk/" target="_blank" rel="noopener">Довідник MDN</a>' };
-          },
-        },
-        {
-          name: "Посилання «До розкладу» веде на #schedule",
-          check(ctx) {
-            const a = ctx.$('a[href="#schedule"]');
-            return { pass: !!a && a.textContent.trim() === "До розкладу" && !!ctx.$("#schedule"), actual: a ? ctx.show(a.outerHTML) : "посилання не знайдено", expected: '<a href="#schedule">До розкладу</a>' };
-          },
-        },
-      ],
-      solution: { html: `<nav>
-  <a href="https://developer.mozilla.org/uk/" target="_blank" rel="noopener">Довідник MDN</a>
-  <a href="#schedule">До розкладу</a>
-</nav>
-
-<section id="schedule">
-  <h2>Розклад кораблів</h2>
-</section>
-` },
-      hint: "Посилання на місце сторінки — це `#` + id: `<a href=\"#schedule\">`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A1, {
-      id: 6,
-      title: "Зображення і alt",
-      concept: "`<img src=\"…\" alt=\"…\">` вставляє зображення. Атрибут `alt` — текстова заміна для людей із програмами читання екрана й на випадок, якщо картинка не завантажилась. Для суто декоративних картинок пишуть порожній `alt=\"\"` — тоді програма читання їх пропускає.",
-      example: `<img src="lighthouse.svg" alt="Маяк на скелі під час заходу сонця">
-<img src="divider.png" alt="">`,
-      missionStory: "Художник причалу розвісив картини, але не підписав їх — сліпий шкіпер не знає, що на них.",
-      worldEvent: "Картини причалу отримали зрозумілі підписи.",
-      taskType: "fix-markup",
-      prompt: "Додай змістовний `alt` (щонайменше 5 символів) до зображення корабля `ship.svg`. Зображення `wave.svg` — декоративне: дай йому порожній `alt=\"\"`.",
-      starterHtml: `<h2>Галерея причалу</h2>
-<img src="ship.svg">
-<img src="wave.svg">
-`,
-      starterCss: null,
-      testCases: [
-        {
-          name: "У корабля змістовний alt",
-          check(ctx) {
-            const alt = ctx.attr('img[src="ship.svg"]', "alt");
-            return { pass: !!alt && alt.trim().length >= 5, actual: ctx.show(alt), expected: "опис щонайменше з 5 символів" };
-          },
-        },
-        {
-          name: "Декоративна хвиля має порожній alt",
-          check: (ctx) => eq(ctx, ctx.attr('img[src="wave.svg"]', "alt"), ""),
-        },
-      ],
-      solution: { html: `<h2>Галерея причалу</h2>
-<img src="ship.svg" alt="Вітрильник із цеглинами біля причалу">
-<img src="wave.svg" alt="">
-` },
-      hint: "Порожній alt — це саме `alt=\"\"`, а не відсутній атрибут: без нього програма читання прочитає ім'я файлу.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A1, {
-      id: 7,
-      title: "Вкладеність тегів",
-      concept: "Теги закриваються у зворотному порядку відкриття, як матрьошки: `<p><strong>…</strong></p>`. Браузер мовчки «лагодить» неправильну вкладеність, але результат буває несподіваним. Тег `<li>` теж варто закривати.",
-      example: `<p><strong>Увага!</strong> Міст зачинено.</p>
-<ul>
-  <li>Мотузка</li>
-  <li>Цвях</li>
-</ul>`,
-      missionStory: "Хтось нашвидку збив оголошення на причалі — дошки перехрещуються, і вітер ось-ось їх зірве.",
-      worldEvent: "Оголошення на причалі міцно прибите.",
-      taskType: "fix-markup",
-      prompt: "Виправ розмітку: `<strong>` має закриватися всередині абзацу, а кожен пункт списку — мати закривальний `</li>`. У консолі перевірки з'являться підказки про незакриті теги.",
-      starterHtml: `<p><strong>Увага!</p></strong>
-<ul>
-  <li>Мотузка
-  <li>Цвях
-</ul>
-`,
-      starterCss: null,
-      testCases: [
-        { name: "Немає незакритих чи переплутаних тегів", check: (ctx) => ({ pass: ctx.lint().length === 0, actual: ctx.lint().join(" ") || "все гаразд", expected: "жодного попередження" }) },
-        { name: "strong усередині абзацу", check: (ctx) => eq(ctx, ctx.$("p strong") ? ctx.$("p strong").textContent : null, "Увага!") },
-        { name: "Два пункти списку", check: (ctx) => eq(ctx, ctx.$$("li").map((li) => li.textContent.trim()).join(", "), "Мотузка, Цвях") },
-      ],
-      codeChecks: [
-        { re: /<strong>[^<]*<\/strong>\s*<\/p>/i, label: "</strong> стоїть перед </p>", in: "html" },
-        { re: /<\/li>[\s\S]*<\/li>/i, label: "Обидва пункти мають </li>", in: "html" },
-      ],
-      solution: { html: `<p><strong>Увага!</strong></p>
-<ul>
-  <li>Мотузка</li>
-  <li>Цвях</li>
-</ul>
-` },
-      hint: "Що відкрилось останнім — закривається першим: `<p><strong>Увага!</strong></p>`.",
-      difficulty: 2,
-    }),
-    Object.assign({}, A1, {
-      id: 8,
-      title: "Спецсимволи й коментарі",
-      concept: "Деякі символи в HTML мають особливе значення, тому їх пишуть як сутності: `&lt;` — це `<`, `&gt;` — `>`, `&amp;` — `&`. Коментарі `<!-- … -->` бачить лише розробник: браузер їх не показує.",
-      example: `<p>2 &lt; 3</p>       <!-- покаже: 2 < 3 -->
-<p>Ріг &amp; Копито</p> <!-- покаже: Ріг & Копито -->`,
-      missionStory: "У трюмі знайшли зашифрований лист. Розшифруй, що побачить мешканець острова, коли прочитає його на дошці оголошень.",
-      worldEvent: "Причал відбудовано — кораблі з тегами пришвартовуються!",
-      taskType: "predict-output",
-      prompt: "Що буде видно на сторінці в кожному абзаці? Коментар браузер не показує.",
-      answerHeading: "Що побачить відвідувач?",
-      answerPlaceholder: "текст абзацу",
-      lineLabels: ["Абзац 1", "Абзац 2", "Абзац 3"],
-      starterCode: null,
-      code: `<p>5 &lt; 7</p>
-<p>Tom &amp; Jerry</p>
-<!-- <p>Секретний вантаж</p> -->
-<p>10 &gt; 3</p>`,
-      expectedAnswer: ["5 < 7", "Tom & Jerry", "10 > 3"],
-      hint: "`lt` — less than (менше), `gt` — greater than (більше), `amp` — ampersand (&).",
-      difficulty: 1,
-    }),
-
-    /* ───────────── Квартал семантики ───────────── */
-    Object.assign({}, A2, {
-      id: 9,
-      title: "header, nav, main, footer",
-      concept: "Семантичні теги описують роль частин сторінки: `<header>` — шапка, `<nav>` — навігація, `<main>` — головний вміст (один на сторінку), `<footer>` — підвал. Їх розуміють пошукові системи й програми читання екрана — на відміну від безликих `<div>`.",
+      title: "Семантичний каркас",
+      concept: "Семантичні теги описують роль частин сторінки: `header` — шапка, `nav` — навігація, `main` — головний вміст (один на сторінку), `article` — самостійний матеріал, `section` — тематичний розділ, `aside` — додаткове, `footer` — підвал. Пошуковики й програми читання екрана розуміють структуру без жодного `div`.",
       example: `<header>
-  <h1>Квартал</h1>
+  <h1>Назва</h1>
   <nav>…</nav>
 </header>
-<main>…</main>
+<main>
+  <article>…</article>
+  <aside>…</aside>
+</main>
 <footer>…</footer>`,
-      missionStory: "У кварталі семантики кожен будинок має знати своє призначення. Збудуй головну вулицю за правилами гільдії.",
-      worldEvent: "Головна вулиця кварталу розмічена.",
+      missionStory: "Квартал семантики відбудовують з нуля. Гільдія вимагає, щоб кожна будівля мала вивіску зі своїм призначенням — жодних безликих коробок.",
+      worldEvent: "Головна вулиця кварталу отримала вивіски.",
       taskType: "write-markup",
-      prompt: "Збудуй сторінку: `header` з `h1` «Квартал семантики» і `nav`, у якому список (`ul`) із трьох посилань; далі `main` з абзацом; наприкінці `footer` з абзацом «© 2026 Гільдія».",
-      starterHtml: `<!-- шапка, головний вміст і підвал -->
+      prompt: "Збудуй сторінку без жодного `div`: `header` з `h1` і `nav`, у якому список щонайменше з 3 посилань; `main`, а в ньому `article` (з `h2` і абзацом) та `aside` з порадою; наприкінці `footer`.",
+      starterHtml: `<!-- каркас сторінки кварталу -->
 `,
       starterCss: null,
       testCases: [
-        { name: "header містить h1 «Квартал семантики»", check: (ctx) => eq(ctx, ctx.$("header h1") ? ctx.text("header h1") : null, "Квартал семантики") },
-        { name: "nav зі списком щонайменше з 3 посилань", check: (ctx) => ({ pass: ctx.$$("nav ul li a").length >= 3, actual: ctx.$$("nav ul li a").length + " посилань", expected: "щонайменше 3" }) },
-        { name: "Є main з абзацом", check: (ctx) => ({ pass: !!ctx.$("main p"), actual: ctx.$("main p") ? "є" : "немає", expected: "є" }) },
-        {
-          name: "footer — останній і з текстом «© 2026 Гільдія»",
-          check(ctx) {
-            const f = ctx.$("footer");
-            const blocks = ctx.$$("body > header, body > main, body > footer");
-            return { pass: !!f && ctx.text(f).includes("© 2026 Гільдія") && blocks[blocks.length - 1] === f, actual: f ? ctx.show(ctx.text(f)) : "немає footer", expected: "footer після main" };
-          },
-        },
+        { name: "header з h1 і nav-списком із 3+ посилань", check: (ctx) => ({ pass: !!ctx.$("header h1") && ctx.$$("header nav ul li a").length >= 3, actual: (ctx.$("header h1") ? "h1 є" : "h1 немає") + ", посилань: " + ctx.$$("header nav ul li a").length, expected: "h1 є, посилань: ≥3" }) },
+        { name: "main містить article (h2 + p) і aside", check: (ctx) => ({ pass: !!ctx.$("main article h2") && !!ctx.$("main article p") && !!ctx.$("main aside"), actual: ["main article h2", "main article p", "main aside"].filter((s) => !ctx.$(s)).join(", ") || "усе на місці", expected: "усе на місці" }) },
+        { name: "footer — останній блок сторінки", check: (ctx) => { const blocks = ctx.$$("body > *"); return { pass: blocks.length > 0 && blocks[blocks.length - 1].tagName === "FOOTER", actual: blocks.length ? blocks[blocks.length - 1].tagName.toLowerCase() : "порожньо", expected: "footer" }; } },
+        { name: "Жодного div", check: (ctx) => eq(ctx, ctx.$$("div").length, 0) },
       ],
       solution: { html: `<header>
   <h1>Квартал семантики</h1>
   <nav>
     <ul>
-      <li><a href="#houses">Будинки</a></li>
-      <li><a href="#market">Ринок</a></li>
-      <li><a href="#guild">Гільдія</a></li>
+      <li><a href="#streets">Вулиці</a></li>
+      <li><a href="#guilds">Гільдії</a></li>
+      <li><a href="#contacts">Контакти</a></li>
     </ul>
   </nav>
 </header>
 <main>
-  <p>Тут кожен дім знає своє призначення.</p>
+  <article>
+    <h2>Нова вивіска ратуші</h2>
+    <p>Майстри повісили вивіску з назвою кожної будівлі.</p>
+  </article>
+  <aside>
+    <p>Порада: заголовки — по порядку, без стрибків.</p>
+  </aside>
 </main>
 <footer>
-  <p>© 2026 Гільдія</p>
+  <p>© 2026 Гільдія будівельників</p>
 </footer>
 ` },
-      hint: "Символ © можна вставити як є або сутністю `&copy;`. `nav` можна покласти всередину `header`.",
-      difficulty: 1,
+      hint: "Почни з трьох головних блоків — `header`, `main`, `footer`, а потім наповни їх. `nav` можна покласти в `header`.",
+      difficulty: 2,
     }),
-    Object.assign({}, A2, {
-      id: 10,
-      title: "article і section",
-      concept: "`<article>` — самостійний, завершений фрагмент (новина, допис, картка товару), який має сенс і поза сторінкою. `<section>` — тематичний розділ сторінки, зазвичай із заголовком.",
-      example: `<main>
-  <article>
-    <h2>Новина дня</h2>
-    <p>…</p>
-  </article>
-  <section>
-    <h2>Мешканці</h2>
-  </section>
-</main>`,
-      missionStory: "Газета кварталу виходить сьогодні вперше. Розклади новину й рубрику так, щоб їх розуміли і люди, і пошукові совиці.",
-      worldEvent: "Перший випуск газети кварталу розійшовся вулицями.",
-      taskType: "write-markup",
-      prompt: "Усередині `main` створи `article` з `h2` «Новий міст» і абзацом, а після нього — `section` з `h2` «Мешканці».",
-      starterHtml: `<main>
-
-</main>
-`,
-      starterCss: null,
-      testCases: [
-        { name: "article з h2 «Новий міст» і абзацом", check: (ctx) => ({ pass: !!ctx.$("main article h2") && ctx.text("main article h2") === "Новий міст" && !!ctx.$("main article p"), actual: ctx.$("main article") ? ctx.show(ctx.$("main article").outerHTML) : "немає article", expected: "article > h2 «Новий міст» + p" }) },
-        { name: "section з h2 «Мешканці»", check: (ctx) => eq(ctx, ctx.$("main section h2") ? ctx.text("main section h2") : null, "Мешканці") },
-      ],
-      solution: { html: `<main>
-  <article>
-    <h2>Новий міст</h2>
-    <p>Будівельники відкрили міст через затоку.</p>
-  </article>
-  <section>
-    <h2>Мешканці</h2>
-  </section>
-</main>
-` },
-      hint: "Обидва блоки — сусіди всередині `<main>`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A2, {
-      id: 11,
-      title: "aside",
-      concept: "`<aside>` — додатковий вміст, пов'язаний з основним лише опосередковано: бічна панель, примітка, реклама, «читайте також». Заміна `<div class=\"sidebar\">` на `<aside>` нічого не змінює візуально, але додає сенсу.",
-      example: `<main>…</main>
-<aside>
-  <h3>Порада</h3>
-  <p>…</p>
-</aside>`,
-      missionStory: "Біля дошки оголошень висить «бічна примітка», збита з безликих дощок. Гільдія вимагає, щоб вона мала власну вивіску.",
-      worldEvent: "Примітка гільдії отримала власну нішу.",
-      taskType: "fix-markup",
-      prompt: "Заміни `<div class=\"sidebar\">` на семантичний `<aside>` (вміст лишається той самий).",
-      starterHtml: `<main>
-  <h2>Новини</h2>
-  <p>Будівництво триває.</p>
-</main>
-<div class="sidebar">
-  <h3>Порада</h3>
-  <p>Носіть каски!</p>
-</div>
-`,
-      starterCss: null,
-      testCases: [
-        { name: "Є aside з порадою", check: (ctx) => eq(ctx, ctx.$("aside h3") ? ctx.text("aside h3") : null, "Порада") },
-        { name: "Немає div.sidebar", check: (ctx) => eq(ctx, ctx.$$("div.sidebar").length, 0) },
-      ],
-      solution: { html: `<main>
-  <h2>Новини</h2>
-  <p>Будівництво триває.</p>
-</main>
-<aside>
-  <h3>Порада</h3>
-  <p>Носіть каски!</p>
-</aside>
-` },
-      hint: "Заміни і відкривальний, і закривальний тег: `<aside>` … `</aside>`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A2, {
-      id: 12,
-      title: "figure і figcaption",
-      concept: "`<figure>` обгортає ілюстрацію (фото, схему, фрагмент коду), а `<figcaption>` дає їй підпис. Так підпис логічно пов'язаний із зображенням.",
-      example: `<figure>
-  <img src="plan.svg" alt="План кварталу">
-  <figcaption>План кварталу, 2026</figcaption>
-</figure>`,
-      missionStory: "Архітектор приніс план кварталу. Повісь його в ратуші з підписом, щоб усі знали, що це.",
-      worldEvent: "У ратуші висить план кварталу з підписом.",
-      taskType: "write-markup",
-      prompt: "Створи `figure` із зображенням `plan.svg` (з alt) і підписом `figcaption` «План кварталу».",
-      starterHtml: `<h2>Ратуша</h2>
-`,
-      starterCss: null,
-      testCases: [
-        { name: "figure містить img з alt", check: (ctx) => ({ pass: !!ctx.$('figure img[src="plan.svg"]') && !!(ctx.attr("figure img", "alt") || "").trim(), actual: ctx.$("figure img") ? ctx.show(ctx.$("figure img").outerHTML) : "немає", expected: '<img src="plan.svg" alt="…">' }) },
-        { name: "Підпис «План кварталу»", check: (ctx) => eq(ctx, ctx.$("figure figcaption") ? ctx.text("figure figcaption") : null, "План кварталу") },
-      ],
-      solution: { html: `<h2>Ратуша</h2>
-<figure>
-  <img src="plan.svg" alt="Схема вулиць кварталу семантики">
-  <figcaption>План кварталу</figcaption>
-</figure>
-` },
-      hint: "`figcaption` — всередині `figure`, поруч із `img`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A2, {
-      id: 13,
-      title: "strong і em",
-      concept: "`<strong>` позначає важливий текст, `<em>` — смисловий наголос. Вони несуть значення (програма читання змінює інтонацію). `<b>` та `<i>` лише змінюють вигляд без сенсу — для стилізації краще CSS.",
-      example: `<p><strong>Обережно:</strong> слизька підлога.</p>
-<p>Я <em>дуже</em> просив не бігати.</p>`,
-      missionStory: "На мосту треба вивісити попередження, яке не можна пропустити — ні очима, ні вухами.",
-      worldEvent: "Попередження на мосту чути навіть з закритими очима.",
-      taskType: "multiple-choice",
-      prompt: "Попередження «Міст зачинено!» критично важливе. Яка розмітка семантично правильна?",
-      optionsLang: "html",
-      options: [
-        `<p><strong>Міст зачинено!</strong></p>`,
-        `<p><b>Міст зачинено!</b></p>`,
-        `<p><span style="font-weight: bold">Міст зачинено!</span></p>`,
-        `<p><i>Міст зачинено!</i></p>`,
-      ],
-      expectedAnswer: `<p><strong>Міст зачинено!</strong></p>`,
-      hint: "Шукай тег, що означає «важливо», а не просто «жирно».",
-      difficulty: 1,
-    }),
-    Object.assign({}, A2, {
-      id: 14,
-      title: "button чи a",
-      concept: "Правило: `<a>` веде кудись (інша сторінка, якір), `<button>` робить дію на місці (відкрити меню, надіслати форму). Кнопки з `<div>` не працюють із клавіатури й не оголошуються програмами читання.",
-      example: `<a href="/shop">До крамниці</a>
-<button type="button">Відкрити меню</button>`,
-      missionStory: "Крамар просить кнопку «Замовити», що відкриває вікно замовлення просто на цій сторінці.",
-      worldEvent: "Крамар радісно дзвенить дзвіночком замовлень.",
-      taskType: "multiple-choice",
-      prompt: "Кнопка «Замовити» відкриває форму замовлення на цій самій сторінці без переходу. Що використати?",
-      optionsLang: "html",
-      options: [
-        `<button type="button">Замовити</button>`,
-        `<a href="#">Замовити</a>`,
-        `<div class="btn">Замовити</div>`,
-        `<span class="link">Замовити</span>`,
-      ],
-      expectedAnswer: `<button type="button">Замовити</button>`,
-      hint: "Дія на місці, без навігації — це завжди кнопка.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A2, {
-      id: 15,
+    L(1, {
+      id: 2,
       title: "Ієрархія заголовків",
-      concept: "Заголовки мають утворювати чисту ієрархію без пропусків: один `h1`, під ним `h2`, у розділах — `h3`. Стрибок з `h1` одразу на `h4` плутає програми читання екрана, які навігують сторінкою саме за заголовками.",
-      example: `<h1>Квартал</h1>
-  <h2>Будинки</h2>
-    <h3>Ратуша</h3>
-  <h2>Вулиці</h2>`,
-      missionStory: "Покажчики в кварталі переплутано: два головні входи і сходи, що ведуть одразу на четвертий поверх.",
-      worldEvent: "Квартал отримав вивіски — кожен дім знає своє призначення!",
+      concept: "Заголовки утворюють зміст сторінки: один `h1`, під ним розділи `h2`, у них підрозділи `h3` — без стрибків рівнів. Пошуковики беруть із цього структуру для SEO, а люди з програмами читання екрана стрибають сторінкою саме по заголовках.",
+      example: `<h1>Готель</h1>
+  <h2>Номери</h2>
+    <h3>Люкс</h3>
+  <h2>Ресторан</h2>`,
+      missionStory: "Покажчики кварталу переплутано: два головні входи, а сходи ведуть одразу на п'ятий поверх. Гості губляться.",
+      worldEvent: "Покажчики кварталу ведуть куди треба.",
       taskType: "fix-markup",
-      prompt: "Виправ рівні заголовків: залиш один `h1` («Квартал семантики»), розділи «Будинки» і «Вулиці» зроби `h2`, а «Ратуша» — `h3`. Без стрибків рівнів.",
+      prompt: "Виправ рівні: один `h1` («Квартал семантики»); розділи «Вулиці» й «Мешканці» — `h2`; «Головна вулиця», «Ринкова площа» — `h3` у «Вулицях»; «Ремісники» — `h3` у «Мешканцях». Текст і порядок не змінюй.",
       starterHtml: `<h1>Квартал семантики</h1>
-<h1>Будинки</h1>
-<h4>Ратуша</h4>
-<h4>Вулиці</h4>
+<h1>Вулиці</h1>
+<h4>Головна вулиця</h4>
+<h4>Ринкова площа</h4>
+<h2>Мешканці</h2>
+<h5>Ремісники</h5>
 `,
       starterCss: null,
       testCases: [
         { name: "Рівно один h1", check: (ctx) => eq(ctx, ctx.$$("h1").length, 1) },
-        {
-          name: "Послідовність h1 → h2 → h3 → h2",
-          check: (ctx) => eq(ctx, ctx.$$("h1, h2, h3, h4, h5, h6").map((h) => h.tagName.toLowerCase() + " " + h.textContent.trim()).join(" | "), "h1 Квартал семантики | h2 Будинки | h3 Ратуша | h2 Вулиці"),
-        },
+        { name: "Ієрархія без стрибків", check: (ctx) => eq(ctx, ctx.$$("h1, h2, h3, h4, h5, h6").map((h) => h.tagName.toLowerCase()).join(" "), "h1 h2 h3 h3 h2 h3") },
       ],
       solution: { html: `<h1>Квартал семантики</h1>
-<h2>Будинки</h2>
-<h3>Ратуша</h3>
 <h2>Вулиці</h2>
+<h3>Головна вулиця</h3>
+<h3>Ринкова площа</h3>
+<h2>Мешканці</h2>
+<h3>Ремісники</h3>
 ` },
-      hint: "«Ратуша» — підрозділ «Будинків», тому на рівень глибше: `h3`. «Вулиці» — новий розділ: знову `h2`.",
+      hint: "Підрозділ завжди на один рівень глибший за свій розділ: `h2` → `h3`.",
       difficulty: 1,
     }),
-
-    /* ───────────── Ринок форм ───────────── */
-    Object.assign({}, A3, {
-      id: 16,
-      title: "form, input, label",
-      concept: "Форма `<form>` збирає дані. Поле `<input>` потребує мітки `<label>`: атрибут `for` мітки дорівнює `id` поля. Тоді клік по мітці фокусує поле, а програма читання озвучує, що вводити. Атрибут `name` — ім'я поля під час відправки.",
-      example: `<form>
-  <label for="nick">Ім'я</label>
-  <input id="nick" name="nick" type="text">
-  <button type="submit">Надіслати</button>
-</form>`,
-      missionStory: "Ринок відкривається! Перший торговець просить простеньку форму замовлення.",
-      worldEvent: "Перший торговець отримав замовлення.",
+    L(1, {
+      id: 3,
+      title: "Типи полів форми",
+      concept: "Правильний `type` поля — безкоштовна зручність: `email` перевіряє формат і на телефоні показує клавіатуру з `@`, `tel` — цифрову клавіатуру, `date` — календар, `number` приймає лише числа й поважає `min`/`max`. Кожне поле потребує `label`.",
+      example: `<label for="mail">Пошта</label>
+<input id="mail" type="email">
+<label for="qty">Кількість</label>
+<input id="qty" type="number" min="1" max="10">`,
+      missionStory: "Гостьовий дім кварталу приймає бронювання по телефону — і плутає цифри. Час на зручну онлайн-форму.",
+      worldEvent: "Гостьовий дім прийняв перше онлайн-бронювання.",
       taskType: "write-markup",
-      prompt: "Створи форму: мітка «Ім'я покупця» пов'язана з текстовим полем `id=\"buyer\"`, `name=\"buyer\"`, і кнопка відправки `type=\"submit\"` з текстом «Замовити».",
+      prompt: "Створи форму з чотирма полями й мітками: пошта `#email` (email), телефон `#phone` (tel), дата заїзду `#arrival` (date), кількість гостей `#guests` (number від 1 до 8).",
       starterHtml: `<form>
 
 </form>
 `,
       starterCss: null,
       testCases: [
-        { name: "Мітка пов'язана з полем #buyer", check: (ctx) => ({ pass: !!ctx.$("#buyer") && ctx.$("#buyer").labels.length > 0 && ctx.text(ctx.$("#buyer").labels[0]) === "Ім'я покупця", actual: ctx.$("#buyer") && ctx.$("#buyer").labels.length ? ctx.show(ctx.text(ctx.$("#buyer").labels[0])) : "мітки немає", expected: "\"Ім'я покупця\"" }) },
-        { name: "Поле текстове з name=\"buyer\"", check: (ctx) => ({ pass: !!ctx.$("#buyer") && ctx.$("#buyer").type === "text" && ctx.attr("#buyer", "name") === "buyer", actual: ctx.$("#buyer") ? ctx.show(ctx.$("#buyer").outerHTML) : "немає", expected: '<input id="buyer" name="buyer" type="text">' }) },
-        { name: "Кнопка відправки «Замовити»", check: (ctx) => ({ pass: !!ctx.$('form button[type="submit"]') && ctx.text('form button[type="submit"]') === "Замовити", actual: ctx.$("form button") ? ctx.show(ctx.$("form button").outerHTML) : "немає", expected: '<button type="submit">Замовити</button>' }) },
-      ],
-      solution: { html: `<form>
-  <label for="buyer">Ім'я покупця</label>
-  <input id="buyer" name="buyer" type="text">
-  <button type="submit">Замовити</button>
-</form>
-` },
-      hint: "`for` у мітці й `id` у полі мають збігатися: `for=\"buyer\"` ↔ `id=\"buyer\"`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A3, {
-      id: 17,
-      title: "Типи полів",
-      concept: "`type` змінює поведінку поля: `email` перевіряє формат пошти й показує на телефоні клавіатуру з `@`, `number` приймає лише числа (з `min`/`max`), `date` показує календар. Правильний тип — це безкоштовна валідація й зручність.",
-      example: `<input type="email" id="mail">
-<input type="number" id="age" min="1" max="120">
-<input type="date" id="day">`,
-      missionStory: "Оптовики хочуть замовляти більше, ніж одну цеглину. Розширимо форму ринку.",
-      worldEvent: "На ринку з'явились оптові замовлення.",
-      taskType: "write-markup",
-      prompt: "Додай у форму три поля з мітками: email `id=\"email\"`, кількість `id=\"qty\"` типу number від 1 до 99 (`min`, `max`), дата доставки `id=\"day\"` типу date.",
-      starterHtml: `<form>
-
-</form>
-`,
-      starterCss: null,
-      testCases: [
-        { name: "#email має type=\"email\"", check: (ctx) => eq(ctx, ctx.$("#email") ? ctx.$("#email").type : null, "email") },
-        { name: "#qty — number з min=1 і max=99", check: (ctx) => eq(ctx, ctx.$("#qty") ? [ctx.$("#qty").type, ctx.attr("#qty", "min"), ctx.attr("#qty", "max")].join(" ") : null, "number 1 99") },
-        { name: "#day має type=\"date\"", check: (ctx) => eq(ctx, ctx.$("#day") ? ctx.$("#day").type : null, "date") },
-        { name: "Кожне поле має мітку", check: (ctx) => ({ pass: ["#email", "#qty", "#day"].every((s) => ctx.$(s) && ctx.$(s).labels.length > 0), actual: ["#email", "#qty", "#day"].filter((s) => !(ctx.$(s) && ctx.$(s).labels.length)).join(", ") || "усі мають", expected: "усі мають мітки" }) },
+        { name: "Типи полів: email, tel, date, number", check: (ctx) => eq(ctx, ["#email", "#phone", "#arrival", "#guests"].map((s) => (ctx.$(s) ? ctx.$(s).type : "—")).join(" "), "email tel date number") },
+        { name: "#guests має min=1 і max=8", check: (ctx) => eq(ctx, ctx.$("#guests") ? ctx.attr("#guests", "min") + "–" + ctx.attr("#guests", "max") : null, "1–8") },
+        { name: "Кожне поле має мітку", check: (ctx) => { const miss = ["#email", "#phone", "#arrival", "#guests"].filter((s) => !labelOf(ctx, s)); return { pass: !miss.length, actual: miss.join(", ") || "усі з мітками", expected: "усі з мітками" }; } },
       ],
       solution: { html: `<form>
   <label for="email">Пошта</label>
-  <input type="email" id="email" name="email">
+  <input id="email" name="email" type="email">
 
-  <label for="qty">Кількість</label>
-  <input type="number" id="qty" name="qty" min="1" max="99">
+  <label for="phone">Телефон</label>
+  <input id="phone" name="phone" type="tel">
 
-  <label for="day">Дата доставки</label>
-  <input type="date" id="day" name="day">
+  <label for="arrival">Дата заїзду</label>
+  <input id="arrival" name="arrival" type="date">
+
+  <label for="guests">Гостей</label>
+  <input id="guests" name="guests" type="number" min="1" max="8">
 </form>
 ` },
-      hint: "Межі числа — атрибути самого поля: `min=\"1\" max=\"99\"`.",
+      hint: "`for` мітки = `id` поля. Межі числа — атрибути `min` і `max` самого поля.",
       difficulty: 1,
     }),
-    Object.assign({}, A3, {
-      id: 18,
-      title: "select і option",
-      concept: "`<select>` — випадний список, `<option>` — його варіанти. Атрибут `value` — те, що надішле форма; текст між тегами — те, що бачить людина. `selected` робить варіант обраним за замовчуванням.",
-      example: `<label for="size">Розмір</label>
-<select id="size" name="size">
-  <option value="s">Малий</option>
-  <option value="m" selected>Середній</option>
-</select>`,
-      missionStory: "Торговець будматеріалами хоче, щоб покупці обирали товар зі списку, а не писали з помилками.",
-      worldEvent: "Прилавок будматеріалів працює без плутанини.",
-      taskType: "write-markup",
-      prompt: "Створи список `select` з `id=\"goods\"` і міткою «Товар». Варіанти: «Цеглина» (`value=\"brick\"`), «Дошка» (`value=\"plank\"`), «Цвяхи» (`value=\"nails\"`).",
-      starterHtml: `<form>
-
-</form>
-`,
-      starterCss: null,
-      testCases: [
-        { name: "Значення варіантів brick, plank, nails", check: (ctx) => eq(ctx, ctx.$$("#goods option").map((o) => o.value).join(","), "brick,plank,nails") },
-        { name: "Тексти варіантів", check: (ctx) => eq(ctx, ctx.$$("#goods option").map((o) => o.textContent.trim()).join(","), "Цеглина,Дошка,Цвяхи") },
-        { name: "Є мітка «Товар»", check: (ctx) => ({ pass: !!ctx.$("#goods") && ctx.$("#goods").labels.length > 0 && ctx.text(ctx.$("#goods").labels[0]) === "Товар", actual: ctx.$("#goods") && ctx.$("#goods").labels.length ? ctx.show(ctx.text(ctx.$("#goods").labels[0])) : "немає", expected: "\"Товар\"" }) },
-      ],
-      solution: { html: `<form>
-  <label for="goods">Товар</label>
-  <select id="goods" name="goods">
-    <option value="brick">Цеглина</option>
-    <option value="plank">Дошка</option>
-    <option value="nails">Цвяхи</option>
-  </select>
-</form>
-` },
-      hint: "Кожен варіант: `<option value=\"brick\">Цеглина</option>`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A3, {
-      id: 19,
-      title: "textarea",
-      concept: "`<textarea>` — багаторядкове поле для довгого тексту (коментар, адреса). На відміну від `<input>`, воно має закривальний тег, а висоту задають атрибутом `rows`.",
-      example: `<label for="note">Коментар</label>
-<textarea id="note" rows="4"></textarea>`,
-      missionStory: "Покупці хочуть залишати побажання до замовлення — довгі, з кількох рядків.",
-      worldEvent: "На ринку з'явилась скринька побажань.",
-      taskType: "fill-blank",
-      prompt: "Встав назву тегу багаторядкового поля.",
-      starterCode: `<label for="note">Побажання</label>
-<___ id="note" rows="4"></textarea>`,
-      expectedAnswer: [["textarea"]],
-      hint: "Подивись на закривальний тег — він уже підказує відповідь.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A3, {
-      id: 20,
-      title: "checkbox і radio",
-      concept: "`type=\"radio\"` — вибір одного з групи: усі перемикачі групи мають однаковий `name`. `type=\"checkbox\"` — незалежна галочка «так/ні». Обидва потребують мітки; часто поле кладуть просто всередину `<label>`.",
-      example: `<label><input type="radio" name="size" value="s"> Малий</label>
-<label><input type="radio" name="size" value="l"> Великий</label>
-<label><input type="checkbox" name="gift"> Подарункова упаковка</label>`,
-      missionStory: "Доставка буває двох видів, а ще можна застрахувати вантаж. Покупцям потрібні зручні перемикачі.",
-      worldEvent: "Ринок пропонує доставку морем і возом.",
-      taskType: "write-markup",
-      prompt: "Додай два радіо-перемикачі з `name=\"delivery\"`: «Кораблем» (`value=\"ship\"`) і «Возом» (`value=\"cart\"`), а також галочку «Застрахувати» з `id=\"insure\"`. У кожного — мітка.",
-      starterHtml: `<form>
-
-</form>
-`,
-      starterCss: null,
-      testCases: [
-        { name: "Два перемикачі в одній групі delivery", check: (ctx) => eq(ctx, ctx.$$('input[type="radio"][name="delivery"]').map((r) => r.value).sort().join(","), "cart,ship") },
-        { name: "Галочка #insure", check: (ctx) => eq(ctx, ctx.$("#insure") ? ctx.$("#insure").type : null, "checkbox") },
-        { name: "Усі поля мають мітки", check: (ctx) => ({ pass: ctx.$$("input").length >= 3 && ctx.$$("input").every((i) => i.labels.length > 0), actual: ctx.$$("input").filter((i) => !i.labels.length).length + " без мітки", expected: "0 без мітки" }) },
-      ],
-      solution: { html: `<form>
-  <label><input type="radio" name="delivery" value="ship"> Кораблем</label>
-  <label><input type="radio" name="delivery" value="cart"> Возом</label>
-  <label><input type="checkbox" id="insure" name="insure"> Застрахувати</label>
-</form>
-` },
-      hint: "Однаковий `name` об'єднує перемикачі в групу — тож обрати можна лише один.",
-      difficulty: 2,
-    }),
-    Object.assign({}, A3, {
-      id: 21,
+    L(1, {
+      id: 4,
       title: "Атрибути валідації",
-      concept: "HTML уміє перевіряти форму без жодного JavaScript: `required` — поле обов'язкове, `minlength`/`maxlength` — довжина тексту, `type=\"email\"` — формат пошти, `pattern` — регулярний вираз. Браузер сам не дасть надіслати некоректну форму.",
-      example: `<input id="nick" required minlength="3">
-<input id="mail" type="email" required>`,
-      missionStory: "На ринок приходять порожні замовлення без імені й адреси. Торговці просять захисту від таких «привидів».",
-      worldEvent: "Порожні замовлення більше не проходять.",
+      concept: "Браузер сам перевіряє форму: `required` — обов'язкове поле, `minlength` — мінімальна довжина, `pattern` — регулярний вираз, якому має відповідати все значення (наприклад, `\\+380\\d{9}` для українського номера), `min`/`max` — межі чисел і дат. Некоректну форму надіслати не вийде.",
+      example: `<input id="code" pattern="[A-Z]{3}-\\d{3}" required>
+<!-- приймає «ABC-123», відхиляє «abc123» -->`,
+      missionStory: "У гостьовий дім сиплються бронювання з номерами «123» і порожніми іменами. Захистимо форму від сміття.",
+      worldEvent: "Форма гостьового дому відсіює помилкові заявки.",
       taskType: "fix-markup",
-      prompt: "Зроби поле `#name` обов'язковим із мінімальною довжиною 3 символи, а `#email` — обов'язковим і з типом email.",
+      prompt: "Посиль валідацію: `#name` — обов'язкове, щонайменше 2 символи (`minlength`); `#phone` — обов'язкове й відповідає шаблону `+380` і ще 9 цифр (`pattern=\"\\+380\\d{9}\"`); `#promo` — необов'язкове, але якщо заповнене, то 4 великі латинські літери й 2 цифри (`[A-Z]{4}\\d{2}`).",
       starterHtml: `<form>
   <label for="name">Ім'я</label>
-  <input id="name" name="name" type="text">
+  <input id="name" name="name">
 
-  <label for="email">Пошта</label>
-  <input id="email" name="email" type="text">
+  <label for="phone">Телефон</label>
+  <input id="phone" name="phone" type="tel">
 
-  <button type="submit">Замовити</button>
+  <label for="promo">Промокод</label>
+  <input id="promo" name="promo">
+
+  <button type="submit">Забронювати</button>
 </form>
 `,
       starterCss: null,
       testCases: [
-        { name: "#name обов'язкове, minlength=3", check: (ctx) => eq(ctx, ctx.$("#name").required + " " + ctx.$("#name").minLength, "true 3") },
-        { name: "#email обов'язкове з типом email", check: (ctx) => eq(ctx, ctx.$("#email").required + " " + ctx.$("#email").type, "true email") },
-        {
-          name: "Некоректна пошта не проходить перевірку браузера",
-          check(ctx) {
-            const input = ctx.$("#email");
-            input.value = "не-пошта";
-            return { pass: input.checkValidity() === false, actual: "checkValidity() → " + input.checkValidity(), expected: "checkValidity() → false" };
-          },
-        },
+        // minlength браузер перевіряє лише після введення з клавіатури, тому атрибут читаємо напряму.
+        { name: "Ім'я обов'язкове, мінімум 2 символи", check: (ctx) => { const i = ctx.$("#name"); i.value = ""; const empty = i.checkValidity(); return { pass: !empty && i.minLength === 2, actual: "порожнє → " + (empty ? "приймається" : "відхилено") + ", minlength = " + i.minLength, expected: "порожнє → відхилено, minlength = 2" }; } },
+        { name: "Телефон: +380671234567 ✓, 0671234567 ✗, порожній ✗", check: (ctx) => { const i = ctx.$("#phone"); const t = (v) => { i.value = v; return i.checkValidity(); }; const r = [t("+380671234567"), t("0671234567"), t("")]; return { pass: r[0] && !r[1] && !r[2], actual: r.join(", "), expected: "true, false, false" }; } },
+        { name: "Промокод: порожній ✓, SALE25 ✓, sale25 ✗", check: (ctx) => { const i = ctx.$("#promo"); const t = (v) => { i.value = v; return i.checkValidity(); }; const r = [t(""), t("SALE25"), t("sale25")]; return { pass: r[0] && r[1] && !r[2], actual: r.join(", "), expected: "true, true, false" }; } },
       ],
       solution: { html: `<form>
   <label for="name">Ім'я</label>
-  <input id="name" name="name" type="text" required minlength="3">
+  <input id="name" name="name" required minlength="2">
 
-  <label for="email">Пошта</label>
-  <input id="email" name="email" type="email" required>
+  <label for="phone">Телефон</label>
+  <input id="phone" name="phone" type="tel" required pattern="\\+380\\d{9}">
 
-  <button type="submit">Замовити</button>
+  <label for="promo">Промокод</label>
+  <input id="promo" name="promo" pattern="[A-Z]{4}\\d{2}">
+
+  <button type="submit">Забронювати</button>
 </form>
 ` },
-      hint: "`required` пишеться без значення: `<input … required minlength=\"3\">`.",
+      hint: "`pattern` перевіряє все значення цілком, тож `^` і `$` не потрібні. Порожнє необов'язкове поле завжди валідне.",
       difficulty: 2,
     }),
-    Object.assign({}, A3, {
-      id: 22,
-      title: "fieldset і legend",
-      concept: "`<fieldset>` групує пов'язані поля форми, а `<legend>` дає групі назву. Для групи радіо-перемикачів це особливо важливо: програма читання оголосить питання («Спосіб доставки») перед варіантами.",
-      example: `<fieldset>
-  <legend>Розмір</legend>
-  <label><input type="radio" name="size"> S</label>
-  <label><input type="radio" name="size"> M</label>
-</fieldset>`,
-      missionStory: "Покупці бачать перемикачі «Кораблем» і «Возом», але не розуміють, до чого вони. Допоможи їм.",
-      worldEvent: "Форма доставки стала зрозумілою кожному.",
+    L(1, {
+      id: 5,
+      title: "figure і figcaption",
+      concept: "`figure` обгортає самодостатню ілюстрацію — фото, схему, діаграму, фрагмент коду, — а `figcaption` дає їй підпис. Підпис логічно прив'язаний до зображення, а `alt` описує саме картинку.",
+      example: `<figure>
+  <img src="map.png" alt="Схема вулиць кварталу">
+  <figcaption>План кварталу, 2026</figcaption>
+</figure>`,
+      missionStory: "Архітектор приніс план кварталу. Повісь його в ратуші з підписом, щоб і зрячі, і незрячі гості знали, що це.",
+      worldEvent: "У ратуші висить план кварталу з підписом.",
       taskType: "write-markup",
-      prompt: "Обгорни обидва перемикачі доставки в `fieldset` з `legend` «Спосіб доставки».",
-      starterHtml: `<form>
-  <label><input type="radio" name="delivery" value="ship"> Кораблем</label>
-  <label><input type="radio" name="delivery" value="cart"> Возом</label>
-</form>
+      prompt: "Створи `figure` з зображенням `plan.svg` (з описовим `alt`) і підписом `figcaption` «План кварталу, 2026». Підпис — після зображення.",
+      starterHtml: `<h2>Ратуша</h2>
 `,
       starterCss: null,
       testCases: [
-        { name: "legend «Спосіб доставки»", check: (ctx) => eq(ctx, ctx.$("fieldset > legend") ? ctx.text("fieldset > legend") : null, "Спосіб доставки") },
-        { name: "Обидва перемикачі всередині fieldset", check: (ctx) => eq(ctx, ctx.$$('fieldset input[type="radio"]').length, 2) },
+        { name: "figure містить img plan.svg з alt", check: (ctx) => ({ pass: !!ctx.$('figure img[src="plan.svg"]') && (ctx.attr("figure img", "alt") || "").trim().length >= 5, actual: ctx.$("figure img") ? ctx.show(ctx.$("figure img").outerHTML) : "немає", expected: '<img src="plan.svg" alt="…">' }) },
+        { name: "figcaption «План кварталу, 2026» — останній у figure", check: (ctx) => { const f = ctx.$("figure"); const last = f && f.lastElementChild; return { pass: !!last && last.tagName === "FIGCAPTION" && ctx.text(last) === "План кварталу, 2026", actual: last ? last.tagName.toLowerCase() + " " + ctx.show(ctx.text(last)) : "немає", expected: "figcaption \"План кварталу, 2026\"" }; } },
       ],
-      solution: { html: `<form>
-  <fieldset>
-    <legend>Спосіб доставки</legend>
-    <label><input type="radio" name="delivery" value="ship"> Кораблем</label>
-    <label><input type="radio" name="delivery" value="cart"> Возом</label>
-  </fieldset>
-</form>
+      solution: { html: `<h2>Ратуша</h2>
+<figure>
+  <img src="plan.svg" alt="Схема вулиць і будинків кварталу">
+  <figcaption>План кварталу, 2026</figcaption>
+</figure>
 ` },
-      hint: "`legend` — перший елемент усередині `fieldset`.",
+      hint: "Усередині `figure`: спершу `img`, потім `figcaption`.",
       difficulty: 1,
     }),
-    Object.assign({}, A3, {
-      id: 23,
-      title: "Доступна форма",
-      concept: "Підказка в `placeholder` — не мітка: вона зникає під час введення, а програми читання часто її не озвучують. У доступній формі кожне поле має `<label>`, а дія — справжній `<button>`, до якого можна дійти клавішею Tab.",
-      example: `<label for="phone">Телефон</label>
-<input id="phone" type="tel" placeholder="+380…">
-<button type="submit">Надіслати</button>`,
-      missionStory: "До ринку прийшла сліпа майстриня, але форма замовлення для неї німа. Зроби форму, якою може скористатись кожен.",
-      worldEvent: "Ринок відкрито — торговці приймають замовлення!",
+    L(1, {
+      id: 6,
+      title: "picture і source",
+      concept: "`picture` дає браузеру вибір зображення: кожен `source` має умову (`media=\"(min-width: 700px)\"`) і файл (`srcset`), а `img` усередині — запасний варіант і носій `alt`. Браузер завантажує лише один файл — так телефон не тягне величезну панораму.",
+      example: `<picture>
+  <source media="(min-width: 900px)" srcset="hero-wide.jpg">
+  <img src="hero-small.jpg" alt="Готель на світанку">
+</picture>`,
+      missionStory: "На вивісці кварталу — панорама. На великих екранах вона чудова, а на телефонах — дрібна й важка. Нехай кожен екран отримає свою картинку.",
+      worldEvent: "Квартал отримав вивіски — кожен дім знає своє призначення!",
+      taskType: "write-markup",
+      prompt: "Створи `picture`: для екранів від 700px — `source` з `media=\"(min-width: 700px)\"` і `srcset=\"panorama.svg\"`; запасне `img` — `harbor.svg` з `alt`. Зображення має займати 100% ширини (CSS уже готовий).",
+      starterHtml: `<h2>Вид на квартал</h2>
+`,
+      starterCss: `img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+`,
+      testCases: [
+        { name: "picture > source(media, srcset) + img з alt", check: (ctx) => { const s = ctx.$("picture > source"); const i = ctx.$("picture > img"); return { pass: !!s && s.getAttribute("media") === "(min-width: 700px)" && s.getAttribute("srcset") === "panorama.svg" && !!i && i.getAttribute("src") === "harbor.svg" && (i.getAttribute("alt") || "").trim().length > 3, actual: s ? ctx.show(s.outerHTML) : "source немає", expected: '<source media="(min-width: 700px)" srcset="panorama.svg"> + <img src="harbor.svg" alt="…">' }; } },
+        { name: "На 800px завантажено панораму", check: (ctx) => ({ pass: /panorama\.svg$/.test(ctx.$("picture img") ? ctx.$("picture img").currentSrc : ""), actual: ctx.$("picture img") ? ctx.$("picture img").currentSrc.split("/").pop() : "немає", expected: "panorama.svg" }) },
+        { name: "На 500px — запасна картинка", width: 500, check: (ctx) => ({ pass: /harbor\.svg$/.test(ctx.$("picture img") ? ctx.$("picture img").currentSrc : ""), actual: ctx.$("picture img") ? ctx.$("picture img").currentSrc.split("/").pop() : "немає", expected: "harbor.svg" }) },
+      ],
+      solution: { html: `<h2>Вид на квартал</h2>
+<picture>
+  <source media="(min-width: 700px)" srcset="panorama.svg">
+  <img src="harbor.svg" alt="Причал кварталу з кораблями">
+</picture>
+`, css: `img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+` },
+      hint: "`source` іде перед `img`, а `alt` пишеться лише в `img`.",
+      difficulty: 2,
+    }),
+
+    /* ───────────── 2. Фарбарня селекторів — CSS поглиблено (база) ───────────── */
+    L(2, {
+      id: 7,
+      title: "box-sizing: border-box",
+      concept: "За замовчуванням `width` — це лише вміст, а `padding` і `border` додаються зверху: картка з `width: 300px` і відступами займає більше. Тому майже кожен проєкт починається з правила `*, *::before, *::after { box-sizing: border-box; }` — тепер ширина включає відступи й рамку.",
+      example: `*, *::before, *::after {
+  box-sizing: border-box;
+}`,
+      missionStory: "Фарбар замовив вивіски по 300 пікселів, а їх привезли ширшими — вони налазять одна на одну.",
+      worldEvent: "Вивіски фарбарні нарешті точного розміру.",
+      taskType: "write-markup",
+      prompt: "Додай на початок `style.css` універсальне правило `border-box` для всіх елементів і псевдоелементів, щоб `.card` займала рівно 300px.",
+      starterHtml: `<div class="card">Вивіска 1</div>
+<div class="card">Вивіска 2</div>
+`,
+      starterCss: `.card {
+  width: 300px;
+  padding: 20px;
+  border: 2px solid #5e3a1c;
+  margin-bottom: 8px;
+}
+`,
+      testCases: [
+        { name: "Картка займає рівно 300px", check: (ctx) => eq(ctx, px(ctx.rect(".card").width), "300px") },
+        { name: "border-box для всіх елементів (навіть body)", check: (ctx) => eq(ctx, ctx.style("body", "box-sizing"), "border-box") },
+        { name: "…і для псевдоелементів", check: (ctx) => eq(ctx, ctx.style(".card", "box-sizing", "::before"), "border-box") },
+      ],
+      solution: { html: `<div class="card">Вивіска 1</div>
+<div class="card">Вивіска 2</div>
+`, css: `*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+.card {
+  width: 300px;
+  padding: 20px;
+  border: 2px solid #5e3a1c;
+  margin-bottom: 8px;
+}
+` },
+      hint: "Селектор: `*, *::before, *::after`.",
+      difficulty: 1,
+    }),
+    L(2, {
+      id: 8,
+      title: "Специфічність",
+      concept: "Коли правила сперечаються, перемагає специфічніше: рахуй (id, класи, теги). `#menu a` = (1,0,1), `.nav .link` = (0,2,0), `a.link` = (0,1,1), `nav a` = (0,0,2). Порівнюють зліва направо: один id сильніший за будь-яку кількість класів.",
+      example: `#menu a      /* 1-0-1 */
+.nav .link   /* 0-2-0 */
+a.link       /* 0-1-1 */
+nav a        /* 0-0-2 */`,
+      missionStory: "Чотири фарбарі одночасно фарбують ті самі посилання. Чия фарба ляже зверху на кожному?",
+      worldEvent: "Фарбарі домовились, чия фарба головна.",
+      taskType: "predict-output",
+      prompt: "Якого кольору буде кожне посилання? Впиши назву кольору англійською, як у CSS.",
+      answerHeading: "Якого кольору посилання?",
+      answerPlaceholder: "назва кольору",
+      lineLabels: ["«Перше»", "«Друге»", "«Третє»"],
+      exampleLang: "css",
+      starterCode: null,
+      code: `<style>
+  #menu a { color: red; }
+  .nav .link { color: blue; }
+  a.link { color: green; }
+  nav a { color: orange; }
+</style>
+<nav id="menu" class="nav"><a class="link">Перше</a></nav>
+<nav class="nav"><a class="link">Друге</a></nav>
+<nav><a class="link">Третє</a></nav>`,
+      expectedAnswer: ["red", "blue", "green"],
+      hint: "Для кожного посилання випиши правила, що до нього підходять, і порівняй їхні (id, класи, теги).",
+      difficulty: 2,
+    }),
+    L(2, {
+      id: 9,
+      title: "Чому стиль не застосовується",
+      concept: "Класика: пишеш `.btn { color: white }`, а колір не змінюється — бо десь є `#hero a { color: navy }` зі старшою специфічністю. `!important` — погане рішення: воно ламає каскад. Краще підвищити специфічність правила або звузити загальне правило (наприклад, `:not(.btn)`).",
+      example: `/* замість !important */
+#hero .btn { color: white; }
+/* або звузь загальне правило */
+#hero a:not(.btn) { color: navy; }`,
+      missionStory: "Кнопка «Забронювати» на вітрині фарбарні вперто лишається темно-синьою, хоч її фарбували в білий.",
+      worldEvent: "Кнопка на вітрині нарешті біла.",
       taskType: "fix-markup",
-      prompt: "Додай мітки до полів `#customer` («Ім'я») і `#address` («Адреса»), а «кнопку» з `div` заміни на справжній `<button type=\"submit\">Надіслати</button>`.",
-      starterHtml: `<form>
-  <input id="customer" placeholder="Ім'я">
-  <input id="address" placeholder="Адреса">
-  <div class="btn">Надіслати</div>
-</form>
+      prompt: "Зроби текст `.btn` білим, не використовуючи `!important` і не змінюючи HTML. Посилання «Каталог» має лишитись темно-синім.",
+      starterHtml: `<section id="hero">
+  <a class="btn" href="#book">Забронювати</a>
+  <a href="#catalog">Каталог</a>
+</section>
 `,
-      starterCss: null,
+      starterCss: `#hero a {
+  color: navy;
+}
+
+.btn {
+  color: white;
+  background: crimson;
+  padding: 10px 16px;
+}
+`,
       testCases: [
-        { name: "#customer має мітку «Ім'я»", check: (ctx) => eq(ctx, ctx.$("#customer").labels.length ? ctx.text(ctx.$("#customer").labels[0]) : null, "Ім'я") },
-        { name: "#address має мітку «Адреса»", check: (ctx) => eq(ctx, ctx.$("#address").labels.length ? ctx.text(ctx.$("#address").labels[0]) : null, "Адреса") },
-        { name: "Справжня кнопка відправки, без div.btn", check: (ctx) => ({ pass: !!ctx.$('form button[type="submit"]') && !ctx.$("div.btn"), actual: ctx.$("div.btn") ? "div.btn на місці" : ctx.$("form button") ? "кнопка є" : "кнопки немає", expected: '<button type="submit">' }) },
+        { name: "Кнопка біла", check: (ctx) => eq(ctx, ctx.style(".btn", "color"), ctx.color("white")) },
+        { name: "«Каталог» лишився темно-синім", check: (ctx) => eq(ctx, ctx.style('a[href="#catalog"]', "color"), ctx.color("navy")) },
       ],
-      solution: { html: `<form>
-  <label for="customer">Ім'я</label>
-  <input id="customer" placeholder="Ім'я">
-  <label for="address">Адреса</label>
-  <input id="address" placeholder="Адреса">
-  <button type="submit">Надіслати</button>
-</form>
+      codeChecks: [{ re: /!important/, not: true, label: "Без !important", in: "css" }],
+      solution: { html: `<section id="hero">
+  <a class="btn" href="#book">Забронювати</a>
+  <a href="#catalog">Каталог</a>
+</section>
+`, css: `#hero a {
+  color: navy;
+}
+
+#hero .btn {
+  color: white;
+  background: crimson;
+  padding: 10px 16px;
+}
 ` },
-      hint: "Мітка перед полем: `<label for=\"customer\">Ім'я</label>`.",
+      hint: "Порівняй специфічність `#hero a` (1,0,1) і `.btn` (0,1,0). Що станеться, якщо написати `#hero .btn`?",
       difficulty: 2,
     }),
-    /* ───────────── Фарбарня селекторів — основи CSS ───────────── */
-    Object.assign({}, A4, {
-      id: 24,
-      title: "Підключення CSS",
-      concept: "Стилі зазвичай живуть в окремому файлі й підключаються в `<head>` тегом `<link rel=\"stylesheet\" href=\"style.css\">`. Атрибут `rel` пояснює браузеру, що це саме таблиця стилів. Для дрібниць є ще блок `<style>` прямо в документі.",
-      example: `<head>
-  <link rel="stylesheet" href="style.css">
-</head>`,
-      missionStory: "Фарбарня острова отримала цілу бочку фарби — тепер її треба правильно під'єднати до будинків.",
-      worldEvent: "До фарбарні під'єднали першу бочку фарби.",
-      taskType: "multiple-choice",
-      prompt: "Який рядок правильно підключає файл стилів `style.css`?",
-      optionsLang: "html",
-      options: [
-        `<link rel="stylesheet" href="style.css">`,
-        `<style src="style.css"></style>`,
-        `<link href="style.css">`,
-        `<script src="style.css"></script>`,
-      ],
-      expectedAnswer: `<link rel="stylesheet" href="style.css">`,
-      hint: "Потрібен тег `link` з обома атрибутами: що підключаємо (`rel`) і звідки (`href`).",
-      difficulty: 1,
-    }),
-    Object.assign({}, A4, {
-      id: 25,
-      title: "Селектори тегу, класу, id",
-      concept: "Селектор обирає елементи для стилю: `p` — усі абзаци, `.note` — елементи з класом `note`, `#title` — єдиний елемент з `id=\"title\"`. Правило: `селектор { властивість: значення; }`.",
-      example: `h1 { color: navy; }
-.price { font-weight: bold; }
-#logo { width: 120px; }`,
-      missionStory: "Фарбар отримав замовлення: пофарбувати вивіску, примітку й усі тексти — кожне по-своєму.",
-      worldEvent: "Вивіска фарбарні засяяла новими кольорами.",
-      taskType: "write-markup",
-      prompt: "У `style.css` зроби: заголовок `#title` кольору `tomato`, елементам класу `.note` — фон `gold`, усім абзацам `p` — розмір шрифту `18px`.",
-      starterHtml: `<h1 id="title">Фарбарня</h1>
-<p class="note">Фарба свіжа!</p>
-<p>Відчинено щодня.</p>
-`,
-      starterCss: `/* твої стилі */
-`,
-      testCases: [
-        { name: "#title кольору tomato", check: (ctx) => eq(ctx, ctx.style("#title", "color"), ctx.color("tomato")) },
-        { name: ".note на тлі gold", check: (ctx) => eq(ctx, ctx.style(".note", "background-color"), ctx.color("gold")) },
-        { name: "Усі абзаци — 18px", check: (ctx) => eq(ctx, ctx.$$("p").map((p) => ctx.style(p, "font-size")).join(" "), "18px 18px") },
-      ],
-      codeChecks: [
-        { re: /#title\s*\{/, label: "Використано селектор #title", in: "css" },
-        { re: /\.note\s*\{/, label: "Використано селектор .note", in: "css" },
-      ],
-      solution: {
-        html: `<h1 id="title">Фарбарня</h1>
-<p class="note">Фарба свіжа!</p>
-<p>Відчинено щодня.</p>
-`,
-        css: `#title {
-  color: tomato;
-}
-
-.note {
-  background-color: gold;
-}
-
-p {
-  font-size: 18px;
-}
-`,
-      },
-      hint: "Клас — з крапкою (`.note`), id — з решіткою (`#title`), тег — просто назва (`p`).",
-      difficulty: 1,
-    }),
-    Object.assign({}, A4, {
-      id: 26,
-      title: "Формати кольорів",
-      concept: "Колір у CSS задають назвою (`tomato`), шістнадцятковим кодом `#rrggbb`, функцією `rgb(червоний, зелений, синій)` з числами 0–255 або `hsl(відтінок, насиченість, світлота)`. Браузер усе зводить до одного — `rgb(...)`.",
-      example: `.a { color: #ff8800; }
-.b { color: rgb(0, 128, 255); }
-.c { color: hsl(120, 60%, 40%); }`,
-      missionStory: "Три бочки фарби підписані різними мовами кольорів. Фарбар просить розфарбувати три човни — кожен своїм записом.",
-      worldEvent: "Три човни біля фарбарні сяють кольорами.",
-      taskType: "write-markup",
-      prompt: "Розфарбуй текст човнів: `.boat1` — `#ff8800`, `.boat2` — `rgb(0, 128, 255)`, `.boat3` — `hsl(120, 60%, 40%)`. Використай саме ці три записи.",
-      starterHtml: `<p class="boat1">Човен «Іскра»</p>
-<p class="boat2">Човен «Хвиля»</p>
-<p class="boat3">Човен «Ліс»</p>
-`,
-      starterCss: `/* розфарбуй човни */
-`,
-      testCases: [
-        { name: ".boat1 — помаранчевий #ff8800", check: (ctx) => eq(ctx, ctx.style(".boat1", "color"), "rgb(255, 136, 0)") },
-        { name: ".boat2 — синій rgb(0, 128, 255)", check: (ctx) => eq(ctx, ctx.style(".boat2", "color"), "rgb(0, 128, 255)") },
-        { name: ".boat3 — зелений hsl(120, 60%, 40%)", check: (ctx) => eq(ctx, ctx.style(".boat3", "color"), ctx.color("hsl(120, 60%, 40%)")) },
-      ],
-      codeChecks: [
-        { re: /#ff8800/i, label: "Є шістнадцятковий запис #ff8800", in: "css" },
-        { re: /rgb\(\s*0\s*,\s*128\s*,\s*255\s*\)/, label: "Є запис rgb(...)", in: "css" },
-        { re: /hsl\(/, label: "Є запис hsl(...)", in: "css" },
-      ],
-      solution: {
-        html: `<p class="boat1">Човен «Іскра»</p>
-<p class="boat2">Човен «Хвиля»</p>
-<p class="boat3">Човен «Ліс»</p>
-`,
-        css: `.boat1 { color: #ff8800; }
-.boat2 { color: rgb(0, 128, 255); }
-.boat3 { color: hsl(120, 60%, 40%); }
-`,
-      },
-      hint: "Властивість для кольору тексту — `color`. Значення: `#ff8800`, `rgb(0, 128, 255)`, `hsl(120, 60%, 40%)`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A4, {
-      id: 27,
-      title: "Шрифти",
-      concept: "`font-family` — гарнітура зі списком запасних варіантів (останній — загальний: `serif`, `sans-serif`). `font-size` — розмір, `font-weight` — насиченість (400 звичайний, 700 жирний), `line-height` — міжрядковий інтервал; число без одиниць множиться на розмір шрифту.",
-      example: `body { font-family: Georgia, serif; }
-h1 { font-size: 32px; }
-p { line-height: 1.5; }`,
-      missionStory: "Друкар острова хоче, щоб вивіски читалися легко: гарний шрифт, великий заголовок і просторі рядки.",
-      worldEvent: "Друкарня надрукувала афіші гарним шрифтом.",
-      taskType: "write-markup",
-      prompt: "Задай `body` шрифт `Georgia, serif`; заголовку `h1` — розмір `32px`; класу `.label` — `font-weight: 700`; абзацам `p` — `line-height: 1.5`.",
-      starterHtml: `<h1>Афіша</h1>
-<p>Сьогодні ярмарок будівельників. <span class="label">Вхід вільний.</span></p>
-`,
-      starterCss: `/* шрифти */
-`,
-      testCases: [
-        { name: "body — Georgia", check: (ctx) => ({ pass: /Georgia/i.test(ctx.style("body", "font-family")), actual: ctx.show(ctx.style("body", "font-family")), expected: "\"Georgia, serif\"" }) },
-        { name: "h1 — 32px", check: (ctx) => eq(ctx, ctx.style("h1", "font-size"), "32px") },
-        { name: ".label — 700", check: (ctx) => eq(ctx, ctx.style(".label", "font-weight"), "700") },
-        { name: "p — line-height 1.5 (24px при 16px шрифті)", check: (ctx) => eq(ctx, ctx.style("p", "line-height"), "24px") },
-      ],
-      solution: {
-        html: `<h1>Афіша</h1>
-<p>Сьогодні ярмарок будівельників. <span class="label">Вхід вільний.</span></p>
-`,
-        css: `body {
-  font-family: Georgia, serif;
-}
-
-h1 {
-  font-size: 32px;
-}
-
-.label {
-  font-weight: 700;
-}
-
-p {
-  line-height: 1.5;
-}
-`,
-      },
-      hint: "Чотири окремі правила. `line-height: 1.5` — без одиниць.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A4, {
-      id: 28,
-      title: "Комбіновані селектори",
-      concept: "Селектор нащадка `nav a` обирає `a` будь-де всередині `nav`. Дочірній селектор `.menu > li` — лише прямих дітей `.menu`, без вкладених глибше. Так стиль не «розтікається» туди, де не треба.",
-      example: `nav a { color: white; }        /* усі посилання в nav */
-.menu > li { border: 1px solid; } /* лише прямі пункти */`,
-      missionStory: "Фарбар пофарбував усі посилання острова в один колір — і тепер не видно, де меню, а де підвал. Час на точність.",
-      worldEvent: "Меню фарбарні тепер легко відрізнити від підвалу.",
-      taskType: "write-markup",
-      prompt: "Зроби посилання лише всередині `nav` кольору `crimson` (посилання в `footer` не чіпай). Прямим пунктам `.menu > li` додай нижню рамку `border-bottom: 2px solid black`; вкладені пункти рамки мати не повинні.",
-      starterHtml: `<nav>
-  <ul class="menu">
-    <li><a href="#a">Фарби</a>
-      <ul>
-        <li><a href="#b">Олійні</a></li>
-      </ul>
-    </li>
-    <li><a href="#c">Пензлі</a></li>
-  </ul>
-</nav>
-<footer><a href="#d">Контакти</a></footer>
-`,
-      starterCss: `/* точні селектори */
-`,
-      testCases: [
-        { name: "Посилання в nav — crimson", check: (ctx) => eq(ctx, ctx.$$("nav a").map((a) => ctx.style(a, "color")).every((c) => c === ctx.color("crimson")), true) },
-        { name: "Посилання в footer не змінилось", check: (ctx) => ({ pass: ctx.style("footer a", "color") !== ctx.color("crimson"), actual: ctx.style("footer a", "color"), expected: "не crimson" }) },
-        { name: "Прямі пункти мають рамку 2px", check: (ctx) => eq(ctx, ctx.$$(".menu > li").map((li) => ctx.style(li, "border-bottom-width")).join(" "), "2px 2px") },
-        { name: "Вкладений пункт без рамки", check: (ctx) => eq(ctx, ctx.style(".menu li li", "border-bottom-width"), "0px") },
-      ],
-      codeChecks: [{ re: /\.menu\s*>\s*li/, label: "Використано дочірній селектор .menu > li", in: "css" }],
-      solution: {
-        html: `<nav>
-  <ul class="menu">
-    <li><a href="#a">Фарби</a>
-      <ul>
-        <li><a href="#b">Олійні</a></li>
-      </ul>
-    </li>
-    <li><a href="#c">Пензлі</a></li>
-  </ul>
-</nav>
-<footer><a href="#d">Контакти</a></footer>
-`,
-        css: `nav a {
-  color: crimson;
-}
-
-.menu > li {
-  border-bottom: 2px solid black;
-}
-`,
-      },
-      hint: "Пробіл між селекторами — «десь усередині», знак `>` — «прямий нащадок».",
-      difficulty: 2,
-    }),
-    Object.assign({}, A4, {
-      id: 29,
+    L(2, {
+      id: 10,
       title: "Псевдокласи",
-      concept: "Псевдокласи обирають елементи за станом чи позицією: `:hover` — під курсором, `:focus` — у фокусі, `:first-child` — перший серед братів, `:nth-child(even)` — кожен парний. Пишуться через двокрапку після селектора.",
-      example: `a:hover { text-decoration: underline; }
-li:first-child { font-weight: 700; }
-tr:nth-child(even) { background: #eee; }`,
-      missionStory: "Прейскурант фарбарні — довгий список. Покупці губляться в рядках; допоможи їм очима.",
-      worldEvent: "Прейскурант фарбарні став «смугастим» і зручним.",
+      concept: "`:focus-visible` — фокус із клавіатури (кільце фокуса для Tab, без нього при кліку мишею). `:nth-child(odd)` — кожен непарний серед братів. `:first-of-type` — перший елемент свого типу серед братів: на відміну від `:first-child`, він «перестрибує» інші теги.",
+      example: `a:focus-visible { outline: 3px solid gold; }
+tr:nth-child(odd) { background: #f5f5f5; }
+p:first-of-type { font-weight: 700; }`,
+      missionStory: "Прейскурант фарбарні довгий і нудний. Зробимо його зручним для очей і для тих, хто ходить сайтом клавіатурою.",
+      worldEvent: "Прейскурант фарбарні став зручним для всіх.",
       taskType: "write-markup",
-      prompt: "Перший пункт списку `li:first-child` зроби жирним (`font-weight: 700`), кожен парний `li:nth-child(even)` — з фоном `lavender`, а посилання при наведенні `a:hover` — кольору `darkorange`.",
-      starterHtml: `<ul>
-  <li>Біла — 5 монет</li>
-  <li>Червона — 7 монет</li>
-  <li>Синя — 7 монет</li>
-  <li>Золота — 20 монет</li>
-</ul>
-<a href="#order">Замовити фарбу</a>
+      prompt: "Додай стилі: посилання й кнопки при фокусі з клавіатури (`:focus-visible`) — рамка `outline: 3px solid gold`; непарні пункти списку (`li:nth-child(odd)`) — фон `#f3eee2`; перший абзац у секції (`p:first-of-type`) — жирний (`700`).",
+      starterHtml: `<section>
+  <h2>Прейскурант</h2>
+  <p>Фарба на будь-який смак.</p>
+  <p>Знижки для гільдій.</p>
+  <ul>
+    <li>Біла — 5 монет</li>
+    <li>Червона — 7 монет</li>
+    <li>Синя — 7 монет</li>
+    <li>Золота — 20 монет</li>
+  </ul>
+  <a href="#order">Замовити</a>
+  <button type="button">Кошик</button>
+</section>
 `,
       starterCss: `/* псевдокласи */
 `,
       testCases: [
-        { name: "Перший пункт жирний, другий — ні", check: (ctx) => eq(ctx, ctx.$$("li").slice(0, 2).map((li) => ctx.style(li, "font-weight")).join(" "), "700 400") },
-        { name: "Парні пункти на тлі lavender", check: (ctx) => eq(ctx, ctx.$$("li").map((li) => ctx.style(li, "background-color") === ctx.color("lavender")).join(" "), "false true false true") },
-        {
-          name: "Правило a:hover змінює колір",
-          check(ctx) {
-            const rule = ctx.rules(/a:hover/)[0];
-            const color = rule ? rule.rule.style.getPropertyValue("color") : "";
-            return { pass: !!rule && ctx.color(color) === ctx.color("darkorange"), actual: rule ? "a:hover { color: " + color + " }" : "правила a:hover немає", expected: "a:hover { color: darkorange }" };
-          },
-        },
+        { name: "Перший абзац жирний, другий — ні", check: (ctx) => eq(ctx, ctx.$$("p").map((p) => ctx.style(p, "font-weight")).join(" "), "700 400") },
+        { name: "Непарні пункти на тлі #f3eee2", check: (ctx) => eq(ctx, ctx.$$("li").map((li) => ctx.style(li, "background-color") === ctx.color("#f3eee2")).join(" "), "true false true false") },
+        { name: ":focus-visible дає рамку 3px gold", check: (ctx) => { const w = ruleProp(ctx, /:focus-visible/, "outline-width"); const c = ruleProp(ctx, /:focus-visible/, "outline-color"); return { pass: w === "3px" && ctx.color(c) === ctx.color("gold"), actual: w ? "outline " + w + " " + c : "правила :focus-visible немає", expected: "outline 3px gold" }; } },
       ],
-      solution: {
-        html: `<ul>
-  <li>Біла — 5 монет</li>
-  <li>Червона — 7 монет</li>
-  <li>Синя — 7 монет</li>
-  <li>Золота — 20 монет</li>
-</ul>
-<a href="#order">Замовити фарбу</a>
-`,
-        css: `li:first-child {
+      solution: { html: `<section>
+  <h2>Прейскурант</h2>
+  <p>Фарба на будь-який смак.</p>
+  <p>Знижки для гільдій.</p>
+  <ul>
+    <li>Біла — 5 монет</li>
+    <li>Червона — 7 монет</li>
+    <li>Синя — 7 монет</li>
+    <li>Золота — 20 монет</li>
+  </ul>
+  <a href="#order">Замовити</a>
+  <button type="button">Кошик</button>
+</section>
+`, css: `a:focus-visible,
+button:focus-visible {
+  outline: 3px solid gold;
+}
+
+li:nth-child(odd) {
+  background-color: #f3eee2;
+}
+
+p:first-of-type {
   font-weight: 700;
 }
-
-li:nth-child(even) {
-  background-color: lavender;
-}
-
-a:hover {
-  color: darkorange;
-}
-`,
-      },
-      hint: "Псевдоклас пишеться впритул до селектора: `li:first-child`, без пробілу.",
+` },
+      hint: "Перший абзац — не перша дитина секції (перед ним `h2`), тому `:first-child` не підійде, а `:first-of-type` — так.",
       difficulty: 2,
     }),
-    Object.assign({}, A4, {
-      id: 30,
-      title: "Специфічність",
-      concept: "Коли кілька правил змагаються за один елемент, перемагає найспецифічніший селектор: id сильніший за клас, клас — сильніший за тег. `p.note` (тег + клас) сильніший за просто `.note`. При рівній специфічності виграє правило, записане пізніше.",
-      example: `p { color: green; }      /* 0-0-1 */
-.note { color: blue; }   /* 0-1-0 */
-#main { color: red; }    /* 1-0-0 — найсильніший */`,
-      missionStory: "Три фарбарі одночасно фарбують ті самі вивіски. Чия фарба ляже зверху?",
-      worldEvent: "Фарбарі домовились, чия фарба головна.",
-      taskType: "predict-output",
-      prompt: "Якого кольору буде текст кожного абзацу? Впиши назву кольору англійською, як у CSS.",
-      answerHeading: "Якого кольору текст?",
-      answerPlaceholder: "назва кольору",
-      lineLabels: ["«Перший»", "«Другий»", "«Третій»"],
-      exampleLang: "css",
-      starterCode: null,
-      code: `<style>
-  p { color: green; }
-  .note { color: blue; }
-  #main { color: red; }
-  p.note { color: purple; }
-</style>
-<p id="main" class="note">Перший</p>
-<p class="note">Другий</p>
-<p>Третій</p>`,
-      expectedAnswer: ["red", "purple", "green"],
-      hint: "Порівнюй силу селекторів: id > клас > тег, а `p.note` — це тег і клас разом.",
-      difficulty: 2,
-    }),
-    Object.assign({}, A4, {
-      id: 31,
-      title: "Каскад і успадкування",
-      concept: "Каскад: при однаковій специфічності перемагає пізніше правило. Успадкування: деякі властивості (колір, шрифт) переходять від батька до дітей, а інші (рамки, відступи, фон) — ні.",
-      example: `body { color: navy; }   /* діти успадкують колір */
-.box { border: 1px solid; } /* рамка не успадковується */`,
-      missionStory: "Фарба тече зверху вниз, але не скрізь. Учень фарбаря просить пояснити, що куди потрапить.",
-      worldEvent: "Учень фарбаря зрозумів, як тече фарба.",
-      taskType: "predict-output",
-      prompt: "Дай відповідь на три запитання про результат цього коду.",
-      answerHeading: "Що вийде?",
-      answerPlaceholder: "відповідь",
-      lineLabels: ["Колір <p>", "Колір <span>", "Рамка в <span>? (так/ні)"],
-      starterCode: null,
-      code: `<style>
-  body { color: navy; }
-  .box { border: 1px solid black; }
-  p { color: teal; }
-  p { color: orange; }
-</style>
-<div class="box">
-  <p>Текст</p>
-  <span>Підпис</span>
-</div>`,
-      expectedAnswer: ["orange", "navy", "ні"],
-      hint: "Два правила `p` рівні за силою — виграє нижче. `span` колір успадковує від `body`, а рамка не успадковується.",
-      difficulty: 2,
-    }),
-    Object.assign({}, A4, {
-      id: 32,
-      title: "Одиниці px, rem, %",
-      concept: "`px` — абсолютні пікселі. `rem` — множник від розміру шрифту кореневого елемента `html` (зазвичай 16px), тож `2rem` = 32px. `%` — частка від батька. `rem` зручний, бо поважає налаштування розміру шрифту користувача.",
-      example: `html { font-size: 16px; }
-.title { font-size: 2rem; }  /* 32px */
-.half { width: 50%; }        /* половина ширини батька */`,
-      missionStory: "Фарбарня готує вивіски різних розмірів, але креслення записані в rem. Порахуй, якою вийде головна вивіска.",
-      worldEvent: "Фарбарня розфарбувала острів у яскраві кольори!",
-      taskType: "multiple-choice",
-      prompt: "Який розмір шрифту отримає `.title`?",
-      exampleLang: "css",
-      code: `html { font-size: 16px; }
-.title { font-size: 2rem; }`,
-      options: ["32px", "2px", "18px", "16px"],
-      optionsLang: "css",
-      expectedAnswer: "32px",
-      hint: "`1rem` дорівнює розміру шрифту `html`.",
-      difficulty: 1,
-    }),
-
-    /* ───────────── Кузня коробок — блокова модель ───────────── */
-    Object.assign({}, A5, {
-      id: 33,
-      title: "margin і padding",
-      concept: "Кожен елемент — коробка з шарів: вміст, `padding` (внутрішній відступ до рамки), `border` (рамка) і `margin` (зовнішній відступ до сусідів). Скорочення `padding: 16px` задає відступ з усіх чотирьох боків.",
-      example: `.card {
-  padding: 16px;  /* усередині */
-  margin: 24px;   /* зовні */
-}`,
-      missionStory: "У кузні коробок скрині стоять впритул, а вміст тисне на стінки. Майстер просить дати їм повітря.",
-      worldEvent: "Скрині в кузні стоять рівно, з проміжками.",
-      taskType: "write-markup",
-      prompt: "Задай `.crate` внутрішній відступ `16px` з усіх боків і зовнішній відступ `24px` з усіх боків.",
-      starterHtml: `<div class="crate">Цвяхи</div>
-<div class="crate">Гвинти</div>
-`,
-      starterCss: `.crate {
-  background: #c08a52;
-}
-`,
-      testCases: [
-        { name: "padding 16px з усіх боків", check: (ctx) => eq(ctx, ["top", "right", "bottom", "left"].map((s) => ctx.style(".crate", "padding-" + s)).join(" "), "16px 16px 16px 16px") },
-        { name: "margin 24px з усіх боків", check: (ctx) => eq(ctx, ["top", "right", "bottom", "left"].map((s) => ctx.style(".crate", "margin-" + s)).join(" "), "24px 24px 24px 24px") },
-      ],
-      solution: {
-        html: `<div class="crate">Цвяхи</div>
-<div class="crate">Гвинти</div>
-`,
-        css: `.crate {
-  background: #c08a52;
-  padding: 16px;
-  margin: 24px;
-}
-`,
-      },
-      hint: "Додай два рядки в наявне правило `.crate`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A5, {
-      id: 34,
-      title: "border і border-radius",
-      concept: "`border: товщина стиль колір` малює рамку (`solid`, `dashed`, `dotted`). `border-radius` заокруглює кути: `8px` — м'які кути, `50%` — коло (якщо елемент квадратний).",
-      example: `.badge {
-  border: 2px dashed #333;
-  border-radius: 8px;
-}`,
-      missionStory: "Скрині ковалів без оковки розсипаються. Додай їм міцні рамки й заокругли гострі кути, щоб ніхто не подряпався.",
-      worldEvent: "Скрині отримали оковки й безпечні кути.",
-      taskType: "write-markup",
-      prompt: "Дай `.crate` рамку `3px solid #5e3a1c` і заокруглення кутів `8px`.",
-      starterHtml: `<div class="crate">Інструменти</div>
-`,
-      starterCss: `.crate {
-  padding: 16px;
-  background: #c08a52;
-}
-`,
-      testCases: [
-        { name: "Рамка 3px solid", check: (ctx) => eq(ctx, ctx.style(".crate", "border-top-width") + " " + ctx.style(".crate", "border-top-style"), "3px solid") },
-        { name: "Колір рамки #5e3a1c", check: (ctx) => eq(ctx, ctx.style(".crate", "border-left-color"), "rgb(94, 58, 28)") },
-        { name: "Кути заокруглено на 8px", check: (ctx) => eq(ctx, ctx.style(".crate", "border-top-left-radius"), "8px") },
-      ],
-      solution: {
-        html: `<div class="crate">Інструменти</div>
-`,
-        css: `.crate {
-  padding: 16px;
-  background: #c08a52;
-  border: 3px solid #5e3a1c;
-  border-radius: 8px;
-}
-`,
-      },
-      hint: "`border: 3px solid #5e3a1c;` — три значення через пробіл.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A5, {
-      id: 35,
-      title: "box-sizing",
-      concept: "За замовчуванням (`content-box`) `width` — це ширина лише вмісту, а `padding` і `border` додаються зверху. З `box-sizing: border-box` ширина включає відступи й рамку — тому розмітку легше рахувати. Багато проєктів вмикають це для всіх елементів.",
-      example: `.a { width: 100px; padding: 10px; }  /* займе 120px */
-.b { box-sizing: border-box;
-     width: 100px; padding: 10px; }  /* займе 100px */`,
-      missionStory: "Дві скрині за однаковим кресленням вийшли різної ширини. Коваль б'ється над загадкою.",
-      worldEvent: "Коваль розгадав загадку однакових креслень.",
-      taskType: "predict-output",
-      prompt: "Яку повну ширину на екрані займе кожен блок (вміст + padding + border)? Впиши число в пікселях.",
-      answerHeading: "Повна ширина блоку (px)",
-      answerPlaceholder: "наприклад 120",
-      answerUnit: "px",
-      lineLabels: [".a", ".b"],
-      exampleLang: "css",
-      starterCode: null,
-      code: `.a {
-  width: 200px;
-  padding: 20px;
-  border: 5px solid;
-}
-.b {
-  box-sizing: border-box;
-  width: 200px;
-  padding: 20px;
-  border: 5px solid;
-}`,
-      expectedAnswer: ["250", "200"],
-      hint: "Для `.a`: 200 + 2×20 + 2×5. Для `.b` усе вже всередині 200.",
-      difficulty: 2,
-    }),
-    Object.assign({}, A5, {
-      id: 36,
-      title: "width і max-width",
-      concept: "`width: 100%` розтягує блок на всю ширину батька, а `max-width` ставить стелю: на широкому екрані блок не стане ширшим за задане значення, а на вузькому — стиснеться. Це основа гумових макетів.",
-      example: `.content {
-  width: 100%;
-  max-width: 600px;
-}`,
-      missionStory: "Дошка оголошень кузні на великих стінах розтягується до смішних розмірів, а на вузьких — вилазить за край.",
-      worldEvent: "Дошка оголошень пасує до будь-якої стіни.",
-      taskType: "write-markup",
-      prompt: "Зроби `.board` шириною `100%`, але не більше `400px`.",
-      starterHtml: `<div class="board">Оголошення кузні</div>
-`,
-      starterCss: `.board {
-  background: #f2c79a;
-  padding: 8px;
-  box-sizing: border-box;
-}
-`,
-      testCases: [
-        { name: "На широкому екрані — рівно 400px", check: (ctx) => eq(ctx, px(ctx.rect(".board").width), "400px") },
-        {
-          name: "На вузькому екрані (300px) стискається",
-          width: 300,
-          check: (ctx) => ({ pass: ctx.rect(".board").width <= 284 + 1 && ctx.rect(".board").width > 200, actual: px(ctx.rect(".board").width), expected: "ширина вікна мінус поля сторінки (284px)" }),
-        },
-      ],
-      codeChecks: [{ re: /max-width\s*:\s*400px/, label: "Є max-width: 400px", in: "css" }],
-      solution: {
-        html: `<div class="board">Оголошення кузні</div>
-`,
-        css: `.board {
-  background: #f2c79a;
-  padding: 8px;
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 400px;
-}
-`,
-      },
-      hint: "Дві властивості в `.board`: `width` і `max-width`.",
-      difficulty: 2,
-    }),
-    Object.assign({}, A5, {
-      id: 37,
-      title: "display: block, inline, inline-block",
-      concept: "Блочні елементи (`block`) займають усю ширину й починаються з нового рядка. Рядкові (`inline`) живуть у тексті й ігнорують `width`/`height`. `inline-block` — компроміс: стоїть у рядку, але приймає розміри й вертикальні відступи.",
-      example: `.tag { display: inline-block; padding: 4px 8px; }
-.row { display: block; }`,
-      missionStory: "Бирки на скринях злипаються в кашу, а вказівники розповзаються по одному рядку. Наведи лад.",
-      worldEvent: "Бирки й вказівники кузні стоять як слід.",
-      taskType: "write-markup",
-      prompt: "Зроби `.tag` (це `span`) `inline-block` з відступами `padding: 4px 8px`, а посилання `.row` — блочними (`display: block`), щоб кожне йшло з нового рядка.",
-      starterHtml: `<p><span class="tag">цвяхи</span> <span class="tag">болти</span></p>
-<a class="row" href="#1">Склад</a>
-<a class="row" href="#2">Майстерня</a>
-`,
-      starterCss: `.tag {
-  background: #ffe061;
-}
-`,
-      testCases: [
-        { name: ".tag — inline-block з відступом 4px 8px", check: (ctx) => eq(ctx, ctx.style(".tag", "display") + " " + ctx.style(".tag", "padding-top") + " " + ctx.style(".tag", "padding-left"), "inline-block 4px 8px") },
-        { name: "Посилання .row — блочні й одне під одним", check: (ctx) => { const [a, b] = ctx.$$(".row"); return { pass: ctx.style(a, "display") === "block" && ctx.rect(b).top > ctx.rect(a).top, actual: ctx.style(a, "display"), expected: "block" }; } },
-      ],
-      solution: {
-        html: `<p><span class="tag">цвяхи</span> <span class="tag">болти</span></p>
-<a class="row" href="#1">Склад</a>
-<a class="row" href="#2">Майстерня</a>
-`,
-        css: `.tag {
-  background: #ffe061;
-  display: inline-block;
-  padding: 4px 8px;
-}
-
-.row {
+    L(2, {
+      id: 11,
+      title: "::before і ::after",
+      concept: "Псевдоелементи `::before` і `::after` додають декор без зайвого HTML: іконки, лапки, лінії під заголовком. Обов'язкова властивість — `content` (для порожнього декору — `content: \"\"`). Щоб задати розміри, псевдоелементу потрібен `display: block` чи `inline-block`.",
+      example: `.title::after {
+  content: "";
   display: block;
-}
-`,
-      },
-      hint: "Додай `display` у правило `.tag` і створи нове правило `.row`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A5, {
-      id: 38,
-      title: "overflow",
-      concept: "Коли вміст більший за блок фіксованої висоти, він «вилазить» назовні. `overflow` керує цим: `hidden` — обрізати, `auto` — показати прокрутку лише за потреби, `scroll` — прокрутка завжди.",
-      example: `.chat {
-  height: 120px;
-  overflow: auto;
+  width: 40px;
+  height: 3px;
+  background: tomato;
 }`,
-      missionStory: "Журнал замовлень кузні переповнився — записи налазять на сусідню вивіску.",
-      worldEvent: "Журнал замовлень отримав акуратну прокрутку.",
-      taskType: "fix-markup",
-      prompt: "Текст у `.log` вилазить за межі блоку висотою 80px. Додай прокрутку, що з'являється лише за потреби.",
-      starterHtml: `<div class="log">
-  <p>Замовлення 1: сто цвяхів.</p>
-  <p>Замовлення 2: дві підкови.</p>
-  <p>Замовлення 3: ковадло.</p>
-  <p>Замовлення 4: сокира.</p>
-  <p>Замовлення 5: дзвін.</p>
-</div>
-<p class="sign">Вивіска кузні</p>
-`,
-      starterCss: `.log {
-  height: 80px;
-  border: 1px solid #333;
-}
-`,
-      testCases: [
-        { name: "overflow: auto у .log", check: (ctx) => eq(ctx, ctx.style(".log", "overflow-y"), "auto") },
-        { name: "Вміст прокручується всередині", check: (ctx) => { const el = ctx.$(".log"); return { pass: el.scrollHeight > el.clientHeight && ctx.style(".log", "overflow-y") !== "visible", actual: "scrollHeight " + el.scrollHeight + ", clientHeight " + el.clientHeight, expected: "вміст більший за блок і прокручується" }; } },
-      ],
-      solution: {
-        html: `<div class="log">
-  <p>Замовлення 1: сто цвяхів.</p>
-  <p>Замовлення 2: дві підкови.</p>
-  <p>Замовлення 3: ковадло.</p>
-  <p>Замовлення 4: сокира.</p>
-  <p>Замовлення 5: дзвін.</p>
-</div>
-<p class="sign">Вивіска кузні</p>
-`,
-        css: `.log {
-  height: 80px;
-  border: 1px solid #333;
-  overflow: auto;
-}
-`,
-      },
-      hint: "Одне слово в правилі `.log`: `overflow: auto;`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A5, {
-      id: 39,
-      title: "Центрування margin: auto",
-      concept: "Блочний елемент із заданою шириною можна відцентрувати горизонтально, якщо лівий і правий `margin` дорівнюють `auto`: браузер розділить вільне місце порівну. Скорочення: `margin: 0 auto`.",
-      example: `.page {
-  width: 600px;
-  margin: 0 auto;
-}`,
-      missionStory: "Нова табличка кузні прибита з лівого краю стіни й виглядає криво. Майстер хоче рівно посередині.",
-      worldEvent: "Кузня викувала міцні рамки для всіх будинків!",
-      taskType: "fix-markup",
-      prompt: "Відцентруй `.card` (ширина 300px) по горизонталі за допомогою `margin`.",
-      starterHtml: `<div class="card">Кузня коробок</div>
-`,
-      starterCss: `.card {
-  width: 300px;
-  padding: 12px;
-  box-sizing: border-box;
-  background: #9aa1a9;
-}
-`,
-      testCases: [
-        {
-          name: "Картка рівно посередині сторінки",
-          check(ctx) {
-            const r = ctx.rect(".card");
-            const body = ctx.rect("body");
-            const left = r.left - body.left, right = body.right - r.right;
-            return { pass: near(left, right, 1), actual: "зліва " + px(left) + ", справа " + px(right), expected: "однаково зліва й справа" };
-          },
-        },
-      ],
-      codeChecks: [{ re: /margin(-left|-right)?\s*:[^;]*auto/, label: "Використано margin з auto", in: "css" }],
-      solution: {
-        html: `<div class="card">Кузня коробок</div>
-`,
-        css: `.card {
-  width: 300px;
-  padding: 12px;
-  box-sizing: border-box;
-  background: #9aa1a9;
-  margin: 0 auto;
-}
-`,
-      },
-      hint: "`margin: 0 auto;` — нуль згори-знизу, авто зліва-справа.",
-      difficulty: 1,
-    }),
-    /* ───────────── Флекс-доки — Flexbox ───────────── */
-    Object.assign({}, A6, {
-      id: 40,
-      title: "display: flex",
-      concept: "`display: flex` на контейнері вишиковує його прямих дітей в один ряд (головна вісь — горизонталь). Діти стають flex-елементами: їхні розміри й вирівнювання тепер керуються властивостями контейнера.",
-      example: `.row {
-  display: flex;
-}`,
-      missionStory: "У флекс-доках човни стоять один під одним, і причал займає пів острова. Вишикуй їх уздовж пірсу.",
-      worldEvent: "Човни в доках стали в ряд.",
+      missionStory: "Фарбар хоче прикрасити вивіски зірочками й підкресленнями, але не дає вбивати в стіни зайві цвяхи (HTML).",
+      worldEvent: "Фарбарня розфарбувала острів — кожен стиль лягає куди треба!",
       taskType: "write-markup",
-      prompt: "Зроби `.dock` flex-контейнером, щоб три човни `.boat` стали в один ряд.",
-      starterHtml: `<div class="dock">
-  <div class="boat">Іскра</div>
-  <div class="boat">Хвиля</div>
-  <div class="boat">Чайка</div>
-</div>
+      prompt: "Без змін HTML: додай перед `.badge` текст `★ ` (через `::before`, колір `gold`), а під `.title` — декоративну лінію `::after`: блок 40×3px з фоном `tomato`.",
+      starterHtml: `<span class="badge">Новинка</span>
+<h2 class="title">Наші майстри</h2>
 `,
-      starterCss: `.boat {
-  width: 100px;
-  padding: 10px;
-  background: #3fb3d9;
-}
+      starterCss: `/* псевдоелементи */
 `,
       testCases: [
-        { name: "Усі човни на одній висоті (в ряд)", check: (ctx) => { const tops = ctx.$$(".boat").map((b) => Math.round(ctx.rect(b).top)); return { pass: tops.every((t) => t === tops[0]), actual: "top: " + tops.join(", "), expected: "однакові top" }; } },
-        { name: ".dock — display: flex", check: (ctx) => eq(ctx, ctx.style(".dock", "display"), "flex") },
+        { name: ".badge::before — «★ » золотого кольору", check: (ctx) => ({ pass: ctx.style(".badge", "content", "::before") === '"★ "' && ctx.style(".badge", "color", "::before") === ctx.color("gold"), actual: ctx.style(".badge", "content", "::before") + " " + ctx.style(".badge", "color", "::before"), expected: '"★ " ' + ctx.color("gold") }) },
+        { name: ".title::after — блок 40×3 tomato", check: (ctx) => { const s = (p) => ctx.style(".title", p, "::after"); return { pass: s("display") === "block" && s("width") === "40px" && s("height") === "3px" && s("background-color") === ctx.color("tomato"), actual: [s("display"), s("width"), s("height")].join(" "), expected: "block 40px 3px" }; } },
       ],
-      solution: {
-        html: `<div class="dock">
-  <div class="boat">Іскра</div>
-  <div class="boat">Хвиля</div>
-  <div class="boat">Чайка</div>
-</div>
-`,
-        css: `.dock {
-  display: flex;
+      codeChecks: [{ re: /<span[^>]*>\s*★/, not: true, label: "Зірочка не в HTML", in: "html" }],
+      solution: { html: `<span class="badge">Новинка</span>
+<h2 class="title">Наші майстри</h2>
+`, css: `.badge::before {
+  content: "★ ";
+  color: gold;
 }
 
-.boat {
-  width: 100px;
-  padding: 10px;
-  background: #3fb3d9;
+.title::after {
+  content: "";
+  display: block;
+  width: 40px;
+  height: 3px;
+  background: tomato;
 }
-`,
-      },
-      hint: "Flex вмикається на батькові (`.dock`), а не на човнах.",
-      difficulty: 1,
+` },
+      hint: "Без `content` псевдоелемент не з'явиться взагалі. Лінії потрібен `display: block`, щоб прийняти ширину й висоту.",
+      difficulty: 2,
     }),
-    Object.assign({}, A6, {
-      id: 41,
-      title: "justify-content",
-      concept: "`justify-content` розподіляє вільне місце вздовж головної осі: `flex-start`, `center`, `flex-end`, `space-between` (крайні — до країв, між рештою рівно), `space-around`, `space-evenly`.",
-      example: `.menu {
-  display: flex;
-  justify-content: space-between;
-}`,
-      missionStory: "Човни скупчились біля одного краю пірсу. Капітан порту хоче, щоб крайні стояли біля стовпів, а решта — рівномірно між ними.",
-      worldEvent: "Човни рівномірно розподілено вздовж пірсу.",
-      taskType: "write-markup",
-      prompt: "Розстав човни так, щоб перший притискався до лівого краю `.dock`, останній — до правого, а між ними було порівну місця.",
-      starterHtml: `<div class="dock">
-  <div class="boat">1</div>
-  <div class="boat">2</div>
-  <div class="boat">3</div>
-</div>
-`,
-      starterCss: `.dock {
-  display: flex;
-  background: #2a85c4;
-}
 
-.boat {
-  width: 80px;
-  height: 40px;
-  background: #f2c79a;
-}
-`,
-      testCases: [
-        {
-          name: "Крайні човни біля країв доку",
-          check(ctx) {
-            const dock = ctx.rect(".dock"), boats = ctx.$$(".boat").map((b) => ctx.rect(b));
-            return { pass: near(boats[0].left, dock.left) && near(boats[2].right, dock.right), actual: "зліва " + px(boats[0].left - dock.left) + ", справа " + px(dock.right - boats[2].right), expected: "0px і 0px" };
-          },
-        },
-        {
-          name: "Проміжки між човнами однакові",
-          check(ctx) {
-            const b = ctx.$$(".boat").map((el) => ctx.rect(el));
-            const g1 = b[1].left - b[0].right, g2 = b[2].left - b[1].right;
-            return { pass: near(g1, g2) && g1 > 100, actual: px(g1) + " і " + px(g2), expected: "рівні великі проміжки" };
-          },
-        },
-      ],
-      solution: {
-        html: `<div class="dock">
-  <div class="boat">1</div>
-  <div class="boat">2</div>
-  <div class="boat">3</div>
-</div>
-`,
-        css: `.dock {
-  display: flex;
-  justify-content: space-between;
-  background: #2a85c4;
-}
-
-.boat {
-  width: 80px;
-  height: 40px;
-  background: #f2c79a;
-}
-`,
-      },
-      hint: "Потрібне значення, яке ставить крайні до країв і ділить решту порівну: `space-between`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A6, {
-      id: 42,
-      title: "align-items",
-      concept: "`align-items` вирівнює flex-елементи по поперечній осі (вертикалі для рядка): `stretch` (за замовчуванням тягне на всю висоту), `flex-start`, `center`, `flex-end`, `baseline`.",
+    /* ───────────── 3. Флекс-доки — Flexbox поглиблено ───────────── */
+    L(3, {
+      id: 12,
+      title: "Властивості контейнера",
+      concept: "На flex-контейнері: `justify-content` розподіляє елементи по головній осі, `align-items` — по поперечній, `gap` задає однакові проміжки між ними. Разом вони вирішують 80% задач розкладки в один рядок.",
       example: `.toolbar {
   display: flex;
+  justify-content: center;
   align-items: center;
+  gap: 12px;
 }`,
-      missionStory: "Човни різної висоти гойдаються вздовж пірсу хто як. Швартувальник хоче, щоб їхні середини були на одній лінії.",
-      worldEvent: "Човни гойдаються в такт на одній лінії.",
+      missionStory: "На причалі доків стоїть пульт керування з трьома кнопками — вони злиплись у куті. Відцентруй їх.",
+      worldEvent: "Пульт доків зручно розкладено.",
       taskType: "write-markup",
-      prompt: "Вирівняй човни різної висоти по центру висоти доку (`.dock` має висоту 160px).",
-      starterHtml: `<div class="dock">
-  <div class="boat small">Шлюпка</div>
-  <div class="boat big">Фрегат</div>
-  <div class="boat">Бриг</div>
+      prompt: "Зроби `.toolbar` flex-контейнером: кнопки — по центру горизонтально й вертикально, з проміжком `12px` між ними.",
+      starterHtml: `<div class="toolbar">
+  <button type="button">Пришвартувати</button>
+  <button type="button">Розвантажити</button>
+  <button type="button">Відпустити</button>
 </div>
 `,
-      starterCss: `.dock {
-  display: flex;
-  height: 160px;
+      starterCss: `.toolbar {
+  width: 600px;
+  height: 80px;
   background: #2a85c4;
-}
-
-.boat { width: 90px; background: #f2c79a; }
-.small { height: 30px; }
-.big { height: 100px; }
-.boat:not(.small):not(.big) { height: 60px; }
-`,
-      testCases: [
-        {
-          name: "Центри всіх човнів на центрі доку",
-          check(ctx) {
-            const dock = ctx.rect(".dock");
-            const mid = dock.top + dock.height / 2;
-            const centers = ctx.$$(".boat").map((b) => { const r = ctx.rect(b); return r.top + r.height / 2; });
-            return { pass: centers.every((c) => near(c, mid)), actual: centers.map((c) => px(c - dock.top)).join(", "), expected: "80px, 80px, 80px" };
-          },
-        },
-      ],
-      solution: {
-        html: `<div class="dock">
-  <div class="boat small">Шлюпка</div>
-  <div class="boat big">Фрегат</div>
-  <div class="boat">Бриг</div>
-</div>
-`,
-        css: `.dock {
-  display: flex;
-  align-items: center;
-  height: 160px;
-  background: #2a85c4;
-}
-
-.boat { width: 90px; background: #f2c79a; }
-.small { height: 30px; }
-.big { height: 100px; }
-.boat:not(.small):not(.big) { height: 60px; }
-`,
-      },
-      hint: "Вертикальне вирівнювання в рядку — `align-items: center` на контейнері.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A6, {
-      id: 43,
-      title: "flex-direction",
-      concept: "`flex-direction` змінює головну вісь: `row` (рядок, за замовчуванням), `column` (стовпчик), а також `row-reverse` і `column-reverse`. Після зміни осі `justify-content` і `align-items» міняються ролями.",
-      example: `.sidebar {
-  display: flex;
-  flex-direction: column;
-}`,
-      missionStory: "На вузькому пірсі човни не поміщаються в ряд. Портовий наглядач велить ставити їх один за одним уздовж причалу.",
-      worldEvent: "Човни вишикувались колоною на вузькому пірсі.",
-      taskType: "write-markup",
-      prompt: "Не прибираючи `display: flex`, зроби так, щоб човни в `.pier` стали стовпчиком (один під одним).",
-      starterHtml: `<div class="pier">
-  <div class="boat">Іскра</div>
-  <div class="boat">Хвиля</div>
-  <div class="boat">Чайка</div>
-</div>
-`,
-      starterCss: `.pier {
-  display: flex;
-}
-
-.boat {
-  width: 120px;
-  padding: 8px;
-  background: #3fb3d9;
 }
 `,
       testCases: [
-        {
-          name: "Човни стоять стовпчиком",
-          check(ctx) {
-            const r = ctx.$$(".boat").map((b) => ctx.rect(b));
-            return { pass: near(r[0].left, r[1].left) && near(r[1].left, r[2].left) && r[1].top > r[0].top && r[2].top > r[1].top, actual: r.map((x) => "(" + px(x.left) + ", " + px(x.top) + ")").join(" "), expected: "однаковий left, зростаючий top" };
-          },
-        },
-        { name: ".pier лишився flex-контейнером", check: (ctx) => eq(ctx, ctx.style(".pier", "display") + " " + ctx.style(".pier", "flex-direction"), "flex column") },
+        { name: "Група кнопок по центру горизонтально", check: (ctx) => { const t = ctx.rect(".toolbar"), b = ctx.$$("button").map((e) => ctx.rect(e)); const l = b[0].left - t.left, r = t.right - b[2].right; return { pass: near(l, r), actual: "зліва " + px(l) + ", справа " + px(r), expected: "однаково" }; } },
+        { name: "Кнопки по центру вертикально", check: (ctx) => { const t = ctx.rect(".toolbar"), b = ctx.rect("button"); return { pass: near(b.top + b.height / 2, t.top + t.height / 2), actual: px(b.top + b.height / 2 - t.top), expected: "40px" }; } },
+        { name: "Проміжки 12px", check: (ctx) => { const b = ctx.$$("button").map((e) => ctx.rect(e)); return { pass: near(b[1].left - b[0].right, 12, 0.6) && near(b[2].left - b[1].right, 12, 0.6), actual: px(b[1].left - b[0].right) + ", " + px(b[2].left - b[1].right), expected: "12px, 12px" }; } },
       ],
-      solution: {
-        html: `<div class="pier">
-  <div class="boat">Іскра</div>
-  <div class="boat">Хвиля</div>
-  <div class="boat">Чайка</div>
+      solution: { html: `<div class="toolbar">
+  <button type="button">Пришвартувати</button>
+  <button type="button">Розвантажити</button>
+  <button type="button">Відпустити</button>
 </div>
-`,
-        css: `.pier {
+`, css: `.toolbar {
   display: flex;
-  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  width: 600px;
+  height: 80px;
+  background: #2a85c4;
 }
-
-.boat {
-  width: 120px;
-  padding: 8px;
-  background: #3fb3d9;
-}
-`,
-      },
-      hint: "`flex-direction: column;` у правилі `.pier`.",
+` },
+      hint: "Чотири рядки на `.toolbar`: `display`, `justify-content`, `align-items`, `gap`.",
       difficulty: 1,
     }),
-    Object.assign({}, A6, {
-      id: 44,
-      title: "gap",
-      concept: "`gap` задає однаковий проміжок між flex- чи grid-елементами — без зайвих `margin` на крайніх. Одне значення — для обох осей, два — `gap: рядки колонки`.",
-      example: `.cards {
+    L(3, {
+      id: 13,
+      title: "flex-grow, flex-shrink, flex-basis",
+      concept: "Скорочення `flex: grow shrink basis`. `flex: 0 0 200px` — не рости, не стискатися, базова ширина 200px (бокова панель). `flex: 1 1 0` — зайняти все вільне місце. Без `shrink: 0` панель на вузькому екрані стискається, коли вмісту поруч тісно.",
+      example: `.sidebar { flex: 0 0 240px; }
+.content { flex: 1 1 0; }`,
+      missionStory: "Будка доглядача доків то розтягується, то стискається, хоча має бути завжди однакової ширини. А пірс поруч має займати решту берега.",
+      worldEvent: "Будка доглядача більше не плющиться.",
+      taskType: "write-markup",
+      prompt: "`.sidebar` — завжди рівно 200px (не росте й не стискається), `.content` — займає весь залишок. Використай `flex` на елементах.",
+      starterHtml: `<div class="layout">
+  <aside class="sidebar">Будка</aside>
+  <main class="content">
+    <div class="wide">Карта пірсу</div>
+  </main>
+</div>
+`,
+      starterCss: `.layout {
   display: flex;
   gap: 16px;
-}`,
-      missionStory: "Човни стоять впритул і труться бортами. Боцман просить залишити між ними однакові проміжки.",
-      worldEvent: "Між човнами з'явились безпечні проміжки.",
-      taskType: "write-markup",
-      prompt: "Додай у `.dock` проміжок `12px` між човнами (без margin на самих човнах).",
-      starterHtml: `<div class="dock">
-  <div class="boat">1</div>
-  <div class="boat">2</div>
-  <div class="boat">3</div>
-</div>
-`,
-      starterCss: `.dock {
-  display: flex;
 }
 
-.boat {
-  width: 60px;
-  height: 40px;
-  background: #f2c79a;
-}
+.sidebar { background: #c08a52; }
+.content { background: #9aa1a9; }
+.wide { width: 300px; background: #e2cf8e; }
 `,
       testCases: [
-        { name: "Проміжки рівно по 12px", check: (ctx) => { const b = ctx.$$(".boat").map((el) => ctx.rect(el)); return { pass: near(b[1].left - b[0].right, 12, 0.5) && near(b[2].left - b[1].right, 12, 0.5), actual: px(b[1].left - b[0].right) + ", " + px(b[2].left - b[1].right), expected: "12px, 12px" }; } },
+        { name: "На 800px: будка 200px, пірс — решта (568px)", check: (ctx) => eq(ctx, px(ctx.rect(".sidebar").width) + " " + px(ctx.rect(".content").width), "200px 568px") },
+        { name: "На 360px будка лишається 200px", width: 360, check: (ctx) => eq(ctx, px(ctx.rect(".sidebar").width), "200px") },
       ],
-      codeChecks: [
-        { re: /\bgap\s*:\s*12px/, label: "Використано gap: 12px", in: "css" },
-        { re: /\.boat[^{]*\{[^}]*margin/, not: true, label: "Без margin на човнах", in: "css" },
-      ],
-      solution: {
-        html: `<div class="dock">
-  <div class="boat">1</div>
-  <div class="boat">2</div>
-  <div class="boat">3</div>
+      codeChecks: [{ re: /flex\s*:\s*0\s+0\s+200px|flex-shrink\s*:\s*0/, label: "Будка не стискається (flex-shrink: 0)", in: "css" }],
+      solution: { html: `<div class="layout">
+  <aside class="sidebar">Будка</aside>
+  <main class="content">
+    <div class="wide">Карта пірсу</div>
+  </main>
 </div>
-`,
-        css: `.dock {
+`, css: `.layout {
   display: flex;
-  gap: 12px;
+  gap: 16px;
 }
 
-.boat {
-  width: 60px;
-  height: 40px;
-  background: #f2c79a;
-}
-`,
-      },
-      hint: "`gap` пишеться на контейнері `.dock`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A6, {
-      id: 45,
-      title: "flex-wrap",
-      concept: "За замовчуванням flex-елементи тиснуться в один рядок, навіть якщо не поміщаються (`flex-wrap: nowrap`). `flex-wrap: wrap` дозволяє переносити зайві елементи на новий рядок — як слова в тексті.",
-      example: `.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}`,
-      missionStory: "У вузькій гавані шість човнів утиснулися в один ряд і зім'яли борти. Нехай зайві стануть у другий ряд.",
-      worldEvent: "У гавані з'явився другий ряд причалів.",
-      taskType: "fix-markup",
-      prompt: "Шість човнів по 100px не поміщаються в док шириною 300px і стискаються. Дозволь їм переноситись на новий рядок.",
-      starterHtml: `<div class="dock">
-  <div class="boat">1</div>
-  <div class="boat">2</div>
-  <div class="boat">3</div>
-  <div class="boat">4</div>
-  <div class="boat">5</div>
-  <div class="boat">6</div>
-</div>
-`,
-      starterCss: `.dock {
-  display: flex;
-  width: 300px;
-  background: #2a85c4;
-}
-
-.boat {
-  width: 100px;
-  height: 40px;
-  box-sizing: border-box;
-  border: 1px solid #5e3a1c;
-  background: #f2c79a;
-}
-`,
-      testCases: [
-        { name: "Човни зберегли ширину 100px", check: (ctx) => eq(ctx, px(ctx.rect(".boat").width), "100px") },
-        { name: "Четвертий човен перенісся на другий рядок", check: (ctx) => { const b = ctx.$$(".boat").map((el) => ctx.rect(el)); return { pass: b[3].top > b[0].top + 30 && near(b[3].left, b[0].left), actual: "4-й човен: top +" + px(b[3].top - b[0].top), expected: "на новому рядку під першим" }; } },
-      ],
-      solution: {
-        html: `<div class="dock">
-  <div class="boat">1</div>
-  <div class="boat">2</div>
-  <div class="boat">3</div>
-  <div class="boat">4</div>
-  <div class="boat">5</div>
-  <div class="boat">6</div>
-</div>
-`,
-        css: `.dock {
-  display: flex;
-  flex-wrap: wrap;
-  width: 300px;
-  background: #2a85c4;
-}
-
-.boat {
-  width: 100px;
-  height: 40px;
-  box-sizing: border-box;
-  border: 1px solid #5e3a1c;
-  background: #f2c79a;
-}
-`,
-      },
-      hint: "Додай у `.dock` одну властивість: `flex-wrap: wrap;`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A6, {
-      id: 46,
-      title: "flex-grow",
-      concept: "`flex-grow` каже, яку частку вільного місця забирає елемент. `flex: 1` — розтягнутись і зайняти все, що лишилось. Класичний макет: бокова панель фіксованої ширини + основна частина з `flex: 1`.",
-      example: `.layout { display: flex; }
-.sidebar { width: 200px; }
-.content { flex: 1; }`,
-      missionStory: "Будка доглядача стоїть збоку, а пірс поруч має зайняти весь берег, що лишився.",
-      worldEvent: "Пірс розтягнувся вздовж усього берега.",
-      taskType: "write-markup",
-      prompt: "`.booth` має ширину 120px. Зроби так, щоб `.pier` зайняв усю решту ширини `.harbor`.",
-      starterHtml: `<div class="harbor">
-  <div class="booth">Будка</div>
-  <div class="pier">Пірс</div>
-</div>
-`,
-      starterCss: `.harbor {
-  display: flex;
-  width: 600px;
-}
-
-.booth { width: 120px; background: #c08a52; }
-.pier { background: #9aa1a9; }
-`,
-      testCases: [
-        { name: "Пірс займає решту: 480px", check: (ctx) => eq(ctx, px(ctx.rect(".pier").width), "480px") },
-        { name: "Будка лишилась 120px", check: (ctx) => eq(ctx, px(ctx.rect(".booth").width), "120px") },
-      ],
-      solution: {
-        html: `<div class="harbor">
-  <div class="booth">Будка</div>
-  <div class="pier">Пірс</div>
-</div>
-`,
-        css: `.harbor {
-  display: flex;
-  width: 600px;
-}
-
-.booth { width: 120px; background: #c08a52; }
-.pier { flex: 1; background: #9aa1a9; }
-`,
-      },
-      hint: "Додай `.pier` властивість `flex: 1` (або `flex-grow: 1`).",
+.sidebar { flex: 0 0 200px; background: #c08a52; }
+.content { flex: 1 1 0; background: #9aa1a9; }
+.wide { width: 300px; background: #e2cf8e; }
+` },
+      hint: "`.sidebar { flex: 0 0 200px; }` і `.content { flex: 1 1 0; }`.",
       difficulty: 2,
     }),
-    Object.assign({}, A6, {
-      id: 47,
-      title: "Центрування флексом",
-      concept: "Найпростіший спосіб відцентрувати будь-що по обох осях: на батькові `display: flex; justify-content: center; align-items: center;`. Батько має мати висоту, інакше вертикально центрувати нема де.",
-      example: `.screen {
+    L(3, {
+      id: 14,
+      title: "Патерн: навбар",
+      concept: "Класичний навбар — два рівні flex: шапка (`logo` ліворуч, меню праворуч через `justify-content: space-between`, вирівнювання по центру висоти) і сам список посилань (`display: flex` + `gap`). Список скидають: `list-style: none; margin: 0; padding: 0`.",
+      example: `.nav { display: flex; justify-content: space-between; align-items: center; }
+.nav__links { display: flex; gap: 20px; list-style: none; margin: 0; padding: 0; }`,
+      missionStory: "Над доками потрібна вивіска-навігатор: назва ліворуч, напрямки праворуч — як у справжніх сайтах.",
+      worldEvent: "Над доками засяяв навігатор.",
+      taskType: "write-markup",
+      prompt: "Зроби навбар: у `.nav` логотип ліворуч, список `.nav__links` праворуч, усе по центру висоти; посилання в рядок із проміжком `20px` (скинь стилі списку).",
+      starterHtml: `<header class="nav">
+  <a class="logo" href="#">Флекс-доки</a>
+  <ul class="nav__links">
+    <li><a href="#ships">Кораблі</a></li>
+    <li><a href="#cargo">Вантажі</a></li>
+    <li><a href="#contacts">Контакти</a></li>
+  </ul>
+</header>
+`,
+      starterCss: `.nav {
+  padding: 12px 24px;
+  background: #1b1612;
+}
+
+.nav a {
+  color: #f3f2ee;
+}
+`,
+      testCases: [
+        { name: "Логотип ліворуч, останнє посилання праворуч", check: (ctx) => { const n = ctx.rect(".nav"), l = ctx.rect(".logo"), a = ctx.$$(".nav__links li"); const last = ctx.rect(a[a.length - 1]); return { pass: near(l.left - n.left, 24) && near(n.right - last.right, 24), actual: "логотип +" + px(l.left - n.left) + ", меню −" + px(n.right - last.right), expected: "по 24px від країв" }; } },
+        { name: "Посилання в рядок з проміжком 20px", check: (ctx) => { const li = ctx.$$(".nav__links li").map((e) => ctx.rect(e)); return { pass: near(li[0].top, li[2].top) && near(li[1].left - li[0].right, 20, 0.6), actual: px(li[1].left - li[0].right), expected: "20px" }; } },
+        { name: "Логотип і меню на одній висоті (по центру)", check: (ctx) => { const l = ctx.rect(".logo"), u = ctx.rect(".nav__links"); return { pass: near(l.top + l.height / 2, u.top + u.height / 2, 2), actual: px(l.top + l.height / 2) + " / " + px(u.top + u.height / 2), expected: "однакові центри" }; } },
+      ],
+      solution: { html: `<header class="nav">
+  <a class="logo" href="#">Флекс-доки</a>
+  <ul class="nav__links">
+    <li><a href="#ships">Кораблі</a></li>
+    <li><a href="#cargo">Вантажі</a></li>
+    <li><a href="#contacts">Контакти</a></li>
+  </ul>
+</header>
+`, css: `.nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: #1b1612;
+}
+
+.nav a {
+  color: #f3f2ee;
+}
+
+.nav__links {
+  display: flex;
+  gap: 20px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+` },
+      hint: "Два flex-контейнери: `.nav` (space-between, center) і `.nav__links` (gap). Без скидання `margin` у `ul` меню з'їде.",
+      difficulty: 2,
+    }),
+    L(3, {
+      id: 15,
+      title: "Патерн: картки товарів",
+      concept: "Гнучка сітка карток на flexbox: `flex-wrap: wrap` переносить картки, `gap` дає проміжки, а `flex: 1 1 200px` каже кожній картці «починай із 200px, рости й стискайся рівно з сусідами». На широкому екрані — кілька в ряд, на вузькому — по одній.",
+      example: `.products { display: flex; flex-wrap: wrap; gap: 16px; }
+.card { flex: 1 1 200px; }`,
+      missionStory: "Крамниця доків викладає товари на прилавок. На великому прилавку — кілька в ряд, на маленькому — по одному, і завжди рівно.",
+      worldEvent: "Прилавок доків став гнучким.",
+      taskType: "write-markup",
+      prompt: "Зроби `.products` гнучкою сіткою: перенесення рядків, проміжок `16px`, кожна `.card` — `flex: 1 1 200px`.",
+      starterHtml: `<div class="products">
+  <article class="card">Мотузка</article>
+  <article class="card">Якір</article>
+  <article class="card">Вітрило</article>
+  <article class="card">Ліхтар</article>
+</div>
+`,
+      starterCss: `.card {
+  padding: 16px;
+  background: #f3eee2;
+  border: 1px solid #c9a86a;
+}
+`,
+      testCases: [
+        { name: "На 800px — по 3 в ряд, рівної ширини", check: (ctx) => { const c = ctx.$$(".card").map((e) => ctx.rect(e)); return { pass: perRow(ctx, ".card") === 3 && near(c[0].width, c[2].width), actual: perRow(ctx, ".card") + " в ряд", expected: "3 в ряд" }; } },
+        { name: "На 400px — по одній на всю ширину", width: 400, check: (ctx) => ({ pass: perRow(ctx, ".card") === 1 && near(ctx.rect(".card").width, 384), actual: perRow(ctx, ".card") + " в ряд, ширина " + px(ctx.rect(".card").width), expected: "1 в ряд, ширина 384px" }) },
+        { name: "Проміжки 16px", check: (ctx) => { const c = ctx.$$(".card").map((e) => ctx.rect(e)); return eq(ctx, px(c[1].left - c[0].right), "16px"); } },
+      ],
+      solution: { html: `<div class="products">
+  <article class="card">Мотузка</article>
+  <article class="card">Якір</article>
+  <article class="card">Вітрило</article>
+  <article class="card">Ліхтар</article>
+</div>
+`, css: `.products {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.card {
+  flex: 1 1 200px;
+  padding: 16px;
+  background: #f3eee2;
+  border: 1px solid #c9a86a;
+}
+` },
+      hint: "Три властивості на контейнері (`display`, `flex-wrap`, `gap`) і одна на картці (`flex`).",
+      difficulty: 2,
+    }),
+    L(3, {
+      id: 16,
+      title: "Патерн: центрування будь-чого",
+      concept: "Модальне вікно, заглушка «порожньо», іконка в кнопці — будь-що центрується однаково: на батькові `display: flex; justify-content: center; align-items: center`. Для оверлею на весь екран — `position: fixed; inset: 0`.",
+      example: `.overlay {
+  position: fixed;
+  inset: 0;
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 300px;
 }`,
-      missionStory: "Прапор доків завжди має майоріти рівно посередині гавані — але хтось прибив його в кутку.",
+      missionStory: "Вікно «Корабель прибув!» вискакує в кутку екрана, і капітани його не помічають.",
       worldEvent: "Доки вишикувано в ідеальну лінію!",
       taskType: "fix-markup",
-      prompt: "Відцентруй `.flag` (40×40) у `.harbor` (300×200) і по горизонталі, і по вертикалі за допомогою flexbox.",
-      starterHtml: `<div class="harbor">
-  <div class="flag"></div>
+      prompt: "Відцентруй `.modal` (280×160) рівно посередині екрана всередині оверлею `.overlay`, використавши flexbox.",
+      starterHtml: `<div class="overlay">
+  <div class="modal">Корабель прибув!</div>
 </div>
 `,
-      starterCss: `.harbor {
-  width: 300px;
-  height: 200px;
-  background: #2a85c4;
+      starterCss: `.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
 }
 
-.flag {
-  width: 40px;
-  height: 40px;
-  background: #f7d23a;
+.modal {
+  width: 280px;
+  height: 160px;
+  background: #ffffff;
 }
 `,
       testCases: [
-        {
-          name: "Прапор рівно в центрі гавані",
-          check(ctx) {
-            const h = ctx.rect(".harbor"), f = ctx.rect(".flag");
-            const dx = f.left + f.width / 2 - (h.left + h.width / 2), dy = f.top + f.height / 2 - (h.top + h.height / 2);
-            return { pass: near(dx, 0) && near(dy, 0), actual: "зсув від центру: " + px(dx) + ", " + px(dy), expected: "0px, 0px" };
-          },
-        },
+        { name: "Вікно в центрі екрана (800×600)", check: (ctx) => { const m = ctx.rect(".modal"); const dx = m.left + m.width / 2 - 400, dy = m.top + m.height / 2 - 300; return { pass: near(dx, 0) && near(dy, 0), actual: "зсув " + px(dx) + ", " + px(dy), expected: "0px, 0px" }; } },
       ],
       codeChecks: [{ re: /display\s*:\s*flex/, label: "Використано flexbox", in: "css" }],
-      solution: {
-        html: `<div class="harbor">
-  <div class="flag"></div>
+      solution: { html: `<div class="overlay">
+  <div class="modal">Корабель прибув!</div>
 </div>
-`,
-        css: `.harbor {
+`, css: `.overlay {
+  position: fixed;
+  inset: 0;
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 300px;
-  height: 200px;
-  background: #2a85c4;
+  background: rgba(0, 0, 0, 0.5);
 }
 
-.flag {
-  width: 40px;
-  height: 40px;
-  background: #f7d23a;
+.modal {
+  width: 280px;
+  height: 160px;
+  background: #ffffff;
 }
-`,
-      },
-      hint: "Три рядки на `.harbor`: `display: flex`, `justify-content: center`, `align-items: center`.",
+` },
+      hint: "Додай три рядки в `.overlay` — модальне вікно чіпати не треба.",
       difficulty: 1,
     }),
 
-    /* ───────────── Гридбург — CSS Grid ───────────── */
-    Object.assign({}, A7, {
-      id: 48,
-      title: "display: grid і колонки",
-      concept: "`display: grid` перетворює контейнер на сітку, а `grid-template-columns` задає колонки: `100px 100px 100px` — три колонки по 100px. Елементи заповнюють клітинки по рядках, автоматично переходячи на наступний рядок.",
-      example: `.gallery {
+    /* ───────────── 4. Гридбург — CSS Grid ───────────── */
+    L(4, {
+      id: 17,
+      title: "Колонки й рядки",
+      concept: "`grid-template-columns: repeat(3, 1fr)` — три рівні колонки. `grid-template-rows: 100px auto` — перший рядок 100px, другий за вмістом. `fr` — частка вільного місця, `auto` — скільки потрібно вмісту.",
+      example: `.board {
   display: grid;
-  grid-template-columns: 200px 200px;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: 100px auto;
 }`,
-      missionStory: "Гридбург — місто, де кожен будинок стоїть у своїй клітинці. Перший квартал треба розпланувати на три колонки.",
-      worldEvent: "Перший квартал Гридбурга розплановано.",
+      missionStory: "Ратуша Гридбурга планує дошку оголошень: три колонки, а верхній ряд — для великих анонсів фіксованої висоти.",
+      worldEvent: "Дошку оголошень Гридбурга розлінійовано.",
       taskType: "write-markup",
-      prompt: "Зроби `.town` сіткою з трьох колонок по `100px`. Шість будинків мають стати двома рядками по три.",
-      starterHtml: `<div class="town">
-  <div class="house">1</div><div class="house">2</div><div class="house">3</div>
-  <div class="house">4</div><div class="house">5</div><div class="house">6</div>
+      prompt: "Зроби `.board` (600px) сіткою з трьох рівних колонок і двох рядків: перший — `100px`, другий — `auto`.",
+      starterHtml: `<div class="board">
+  <div class="cell">Анонс 1</div><div class="cell">Анонс 2</div><div class="cell">Анонс 3</div>
+  <div class="cell">Новина</div><div class="cell">Новина</div><div class="cell">Новина</div>
 </div>
 `,
-      starterCss: `.house {
-  height: 50px;
-  background: #e8663d;
+      starterCss: `.board {
+  width: 600px;
+}
+
+.cell {
   border: 1px solid #1b1612;
+  background: #f3eee2;
 }
 `,
       testCases: [
-        { name: "Перший ряд — будинки 1–3 поруч по 100px", check: (ctx) => { const h = ctx.$$(".house").map((e) => ctx.rect(e)); return { pass: near(h[1].left - h[0].left, 100) && near(h[2].left - h[1].left, 100) && near(h[0].top, h[2].top), actual: px(h[1].left - h[0].left) + ", " + px(h[2].left - h[1].left), expected: "100px, 100px" }; } },
-        { name: "Будинок 4 починає другий ряд", check: (ctx) => { const h = ctx.$$(".house").map((e) => ctx.rect(e)); return { pass: near(h[3].left, h[0].left) && h[3].top > h[0].top + 40, actual: "4-й: left +" + px(h[3].left - h[0].left) + ", top +" + px(h[3].top - h[0].top), expected: "під першим" }; } },
+        { name: "Три колонки по 200px", check: (ctx) => eq(ctx, ctx.$$(".cell").slice(0, 3).map((c) => px(ctx.rect(c).width)).join(" "), "200px 200px 200px") },
+        { name: "Перший ряд — 100px заввишки", check: (ctx) => eq(ctx, px(ctx.rect(".cell").height), "100px") },
+        { name: "Другий ряд — за вмістом", check: (ctx) => { const h = ctx.rect(ctx.$$(".cell")[3]).height; return { pass: h < 60 && ctx.style(".board", "display") === "grid", actual: px(h), expected: "висота тексту" }; } },
       ],
-      solution: {
-        html: `<div class="town">
-  <div class="house">1</div><div class="house">2</div><div class="house">3</div>
-  <div class="house">4</div><div class="house">5</div><div class="house">6</div>
+      solution: { html: `<div class="board">
+  <div class="cell">Анонс 1</div><div class="cell">Анонс 2</div><div class="cell">Анонс 3</div>
+  <div class="cell">Новина</div><div class="cell">Новина</div><div class="cell">Новина</div>
 </div>
-`,
-        css: `.town {
+`, css: `.board {
   display: grid;
-  grid-template-columns: 100px 100px 100px;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: 100px auto;
+  width: 600px;
 }
 
-.house {
-  height: 50px;
-  background: #e8663d;
+.cell {
   border: 1px solid #1b1612;
+  background: #f3eee2;
 }
-`,
-      },
-      hint: "Правило для `.town`: `display: grid` і `grid-template-columns` з трьома значеннями.",
+` },
+      hint: "`grid-template-columns: repeat(3, 1fr);` і `grid-template-rows: 100px auto;`.",
       difficulty: 1,
     }),
-    Object.assign({}, A7, {
-      id: 49,
-      title: "Одиниця fr",
-      concept: "`fr` (fraction) — частка вільного місця сітки. `1fr 2fr` ділить ширину на три частини: перша колонка отримує одну, друга — дві. Гнучко, без підрахунку відсотків.",
-      example: `.layout {
-  display: grid;
-  grid-template-columns: 1fr 3fr;
-}`,
-      missionStory: "Ринкова площа Гридбурга ділиться між двома гільдіями: друга вдвічі більша й хоче вдвічі більше місця.",
-      worldEvent: "Площу поділено чесно — за розміром гільдій.",
-      taskType: "write-markup",
-      prompt: "Розділи `.square` (300px) на дві колонки у пропорції 1 : 2 за допомогою `fr`.",
-      starterHtml: `<div class="square">
-  <div class="guild">Ковалі</div>
-  <div class="guild">Мулярі</div>
-</div>
-`,
-      starterCss: `.square {
-  display: grid;
-  width: 300px;
-}
-
-.guild { background: #f2c79a; border-right: 1px solid #5e3a1c; }
-`,
-      testCases: [
-        { name: "Ширини колонок 100px і 200px", check: (ctx) => eq(ctx, ctx.$$(".guild").map((g) => px(ctx.rect(g).width)).join(" "), "100px 200px") },
-      ],
-      codeChecks: [{ re: /grid-template-columns\s*:\s*1fr\s+2fr/, label: "Використано 1fr 2fr", in: "css" }],
-      solution: {
-        html: `<div class="square">
-  <div class="guild">Ковалі</div>
-  <div class="guild">Мулярі</div>
-</div>
-`,
-        css: `.square {
-  display: grid;
-  grid-template-columns: 1fr 2fr;
-  width: 300px;
-}
-
-.guild { background: #f2c79a; border-right: 1px solid #5e3a1c; }
-`,
-      },
-      hint: "`grid-template-columns: 1fr 2fr;`",
-      difficulty: 1,
-    }),
-    Object.assign({}, A7, {
-      id: 50,
-      title: "gap у сітці",
-      concept: "У сітці `gap` задає «вулиці» між клітинками: `gap: 10px` — однакові проміжки між рядками й колонками; `gap: 20px 10px` — окремо для рядків і колонок (`row-gap`, `column-gap`).",
-      example: `.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px 10px;
-}`,
-      missionStory: "Будинки Гридбурга стоять стіна до стіни — між ними не пройти. Проклади вулиці.",
-      worldEvent: "Між кварталами Гридбурга пролягли вулиці.",
-      taskType: "write-markup",
-      prompt: "Додай у сітку `.town` проміжки: `20px` між рядками і `10px` між колонками.",
-      starterHtml: `<div class="town">
-  <div class="house">1</div><div class="house">2</div>
-  <div class="house">3</div><div class="house">4</div>
-</div>
-`,
-      starterCss: `.town {
-  display: grid;
-  grid-template-columns: 100px 100px;
-}
-
-.house { height: 40px; background: #e8663d; }
-`,
-      testCases: [
-        { name: "Між колонками 10px", check: (ctx) => { const h = ctx.$$(".house").map((e) => ctx.rect(e)); return eq(ctx, px(h[1].left - h[0].right), "10px"); } },
-        { name: "Між рядками 20px", check: (ctx) => { const h = ctx.$$(".house").map((e) => ctx.rect(e)); return eq(ctx, px(h[2].top - h[0].bottom), "20px"); } },
-      ],
-      solution: {
-        html: `<div class="town">
-  <div class="house">1</div><div class="house">2</div>
-  <div class="house">3</div><div class="house">4</div>
-</div>
-`,
-        css: `.town {
-  display: grid;
-  grid-template-columns: 100px 100px;
-  gap: 20px 10px;
-}
-
-.house { height: 40px; background: #e8663d; }
-`,
-      },
-      hint: "Перше значення `gap` — для рядків, друге — для колонок.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A7, {
-      id: 51,
-      title: "repeat і minmax",
-      concept: "`repeat(auto-fill, minmax(100px, 1fr))` — магічна формула адаптивної сітки: «стільки колонок, скільки поміститься, кожна не вужча за 100px, а залишок поділити порівну». Колонки самі перебудовуються під ширину екрана, без медіазапитів.",
-      example: `.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-}`,
-      missionStory: "Гридбург будує нові квартали на берегах різної ширини. Архітектор хоче одне креслення на всі береги.",
-      worldEvent: "Креслення Гридбурга підходить до будь-якого берега.",
-      taskType: "write-markup",
-      prompt: "Задай `.town` колонки через `repeat(auto-fill, minmax(100px, 1fr))`, щоб у широкому місті вміщалось більше будинків у ряд, а у вузькому — менше.",
-      starterHtml: `<div class="town">
-  <div class="house">1</div><div class="house">2</div><div class="house">3</div>
-  <div class="house">4</div><div class="house">5</div><div class="house">6</div>
-</div>
-`,
-      starterCss: `.town {
-  display: grid;
-}
-
-.house { height: 40px; background: #e8663d; border: 1px solid #1b1612; }
-`,
-      testCases: [
-        { name: "На ширині 800px — багато колонок (6 в ряд)", check: (ctx) => { const h = ctx.$$(".house").map((e) => ctx.rect(e)); return { pass: near(h[5].top, h[0].top), actual: near(h[5].top, h[0].top) ? "в один ряд" : "у кілька рядів", expected: "6 будинків в один ряд" }; } },
-        {
-          name: "На ширині 250px — по 2 в ряд",
-          width: 250,
-          check(ctx) {
-            const h = ctx.$$(".house").map((e) => ctx.rect(e));
-            const perRow = h.filter((r) => near(r.top, h[0].top)).length;
-            return eq(ctx, perRow, 2);
-          },
-        },
-      ],
-      codeChecks: [{ re: /repeat\(\s*auto-fill\s*,\s*minmax\(\s*100px\s*,\s*1fr\s*\)\s*\)/, label: "Використано repeat(auto-fill, minmax(100px, 1fr))", in: "css" }],
-      solution: {
-        html: `<div class="town">
-  <div class="house">1</div><div class="house">2</div><div class="house">3</div>
-  <div class="house">4</div><div class="house">5</div><div class="house">6</div>
-</div>
-`,
-        css: `.town {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-}
-
-.house { height: 40px; background: #e8663d; border: 1px solid #1b1612; }
-`,
-      },
-      hint: "Скопіюй формулу з теорії й заміни 200px на 100px.",
-      difficulty: 2,
-    }),
-    Object.assign({}, A7, {
-      id: 52,
-      title: "grid-column і span",
-      concept: "Елемент сітки може займати кілька клітинок: `grid-column: span 2` — розтягнутись на дві колонки, `grid-column: 1 / -1` — від першої лінії до останньої (на всю ширину).",
-      example: `.banner {
-  grid-column: 1 / -1;
-}
-.wide {
-  grid-column: span 2;
-}`,
-      missionStory: "У Гридбурзі будують ратушу — вона вдвічі ширша за звичайний будинок і не влазить в одну клітинку.",
-      worldEvent: "Ратуша Гридбурга стоїть на двох ділянках.",
-      taskType: "write-markup",
-      prompt: "Зроби `.hall` шириною у дві колонки сітки `.town` (колонки по 100px, проміжок 10px).",
-      starterHtml: `<div class="town">
-  <div class="house hall">Ратуша</div>
-  <div class="house">Дім</div>
-  <div class="house">Дім</div>
-  <div class="house">Дім</div>
-</div>
-`,
-      starterCss: `.town {
-  display: grid;
-  grid-template-columns: repeat(3, 100px);
-  gap: 10px;
-}
-
-.house { height: 40px; background: #e8663d; }
-.hall { background: #f7d23a; }
-`,
-      testCases: [
-        { name: "Ратуша завширшки 210px (дві колонки + проміжок)", check: (ctx) => eq(ctx, px(ctx.rect(".hall").width), "210px") },
-      ],
-      codeChecks: [{ re: /grid-column\s*:/, label: "Використано grid-column", in: "css" }],
-      solution: {
-        html: `<div class="town">
-  <div class="house hall">Ратуша</div>
-  <div class="house">Дім</div>
-  <div class="house">Дім</div>
-  <div class="house">Дім</div>
-</div>
-`,
-        css: `.town {
-  display: grid;
-  grid-template-columns: repeat(3, 100px);
-  gap: 10px;
-}
-
-.house { height: 40px; background: #e8663d; }
-.hall { background: #f7d23a; grid-column: span 2; }
-`,
-      },
-      hint: "`grid-column: span 2;` у правилі `.hall`.",
-      difficulty: 2,
-    }),
-    Object.assign({}, A7, {
-      id: 53,
+    L(4, {
+      id: 18,
       title: "grid-template-areas",
-      concept: "`grid-template-areas` малює макет «картинкою» з назв: кожен рядок у лапках — рядок сітки. Елементам дають ті самі назви через `grid-area`. Повторена назва розтягує область на кілька клітинок.",
+      concept: "`grid-template-areas` малює макет «картинкою» з назв: кожен рядок у лапках — рядок сітки, повторена назва розтягує область. Елементи займають області через `grid-area`.",
       example: `.page {
   display: grid;
-  grid-template-columns: 150px 1fr;
+  grid-template-columns: 200px 1fr;
   grid-template-areas:
     "head head"
-    "side main";
+    "side main"
+    "foot foot";
 }
-header { grid-area: head; }
-aside  { grid-area: side; }
-main   { grid-area: main; }`,
-      missionStory: "Ратуша Гридбурга замовила план головної площі: шапка зверху на всю ширину, бічна алея ліворуч, площа праворуч, а внизу — набережна.",
-      worldEvent: "План головної площі Гридбурга затверджено.",
+header { grid-area: head; }`,
+      missionStory: "Ратуша затверджує план головної площі: шапка на всю ширину, алея ліворуч, площа праворуч, набережна внизу.",
+      worldEvent: "План головної площі затверджено.",
       taskType: "write-markup",
-      prompt: "Розклади `.page` областями: перший рядок — `header` на обидві колонки, другий — `aside` (ліва колонка 150px) і `main`, третій — `footer` на обидві колонки. Використай `grid-template-areas` і `grid-area`.",
+      prompt: "Розклади `.page` областями: `header` на обидві колонки, далі `aside` (150px) і `main`, внизу `footer` на обидві колонки. Використай `grid-template-areas` і `grid-area`.",
       starterHtml: `<div class="page">
   <header>Шапка</header>
   <aside>Алея</aside>
@@ -2217,23 +891,21 @@ main   { grid-area: main; }`,
 header, aside, main, footer { padding: 8px; border: 1px solid #1b1612; }
 `,
       testCases: [
-        { name: "Шапка й підвал на всю ширину", check: (ctx) => { const page = ctx.rect(".page"); return { pass: near(ctx.rect("header").width, page.width) && near(ctx.rect("footer").width, page.width), actual: px(ctx.rect("header").width) + " / " + px(ctx.rect("footer").width), expected: px(page.width) + " обидва" }; } },
-        { name: "aside ліворуч від main в одному рядку", check: (ctx) => { const a = ctx.rect("aside"), m = ctx.rect("main"); return { pass: near(a.top, m.top) && a.right <= m.left + 1 && near(a.width, 150), actual: "aside " + px(a.width) + ", top " + px(a.top) + " / main top " + px(m.top), expected: "aside 150px поруч із main" }; } },
-        { name: "Підвал нижче за main", check: (ctx) => ({ pass: ctx.rect("footer").top >= ctx.rect("main").bottom - 1, actual: px(ctx.rect("footer").top - ctx.rect("main").bottom), expected: "під main" }) },
+        { name: "Шапка й підвал на всю ширину", check: (ctx) => { const w = ctx.rect(".page").width; return { pass: near(ctx.rect("header").width, w) && near(ctx.rect("footer").width, w), actual: px(ctx.rect("header").width) + " / " + px(ctx.rect("footer").width), expected: px(w) }; } },
+        { name: "aside (150px) ліворуч від main", check: (ctx) => { const a = ctx.rect("aside"), m = ctx.rect("main"); return { pass: near(a.top, m.top) && near(a.width, 150) && a.right <= m.left + 1, actual: "aside " + px(a.width), expected: "aside 150px поруч із main" }; } },
+        { name: "Підвал під main", check: (ctx) => ({ pass: ctx.rect("footer").top >= ctx.rect("main").bottom - 1, actual: px(ctx.rect("footer").top - ctx.rect("main").bottom), expected: "≥ 0px" }) },
       ],
       codeChecks: [
         { re: /grid-template-areas\s*:/, label: "Використано grid-template-areas", in: "css" },
         { re: /grid-area\s*:/, label: "Елементам задано grid-area", in: "css" },
       ],
-      solution: {
-        html: `<div class="page">
+      solution: { html: `<div class="page">
   <header>Шапка</header>
   <aside>Алея</aside>
   <main>Площа</main>
   <footer>Набережна</footer>
 </div>
-`,
-        css: `.page {
+`, css: `.page {
   display: grid;
   grid-template-columns: 150px 1fr;
   grid-template-areas:
@@ -2248,408 +920,2189 @@ main { grid-area: main; }
 footer { grid-area: foot; }
 
 header, aside, main, footer { padding: 8px; border: 1px solid #1b1612; }
-`,
-      },
-      hint: "Три рядки в лапках: `\"head head\"`, `\"side main\"`, `\"foot foot\"`; потім `grid-area` для кожного блоку.",
-      difficulty: 3,
+` },
+      hint: "Три рядки шаблону, у кожному дві назви: `\"head head\"`, `\"side main\"`, `\"foot foot\"`.",
+      difficulty: 2,
     }),
-    Object.assign({}, A7, {
-      id: 54,
-      title: "Макет сторінки",
-      concept: "Назви в `grid-template-areas` мають точно збігатися з `grid-area` елементів, а кожен рядок — мати однакову кількість клітинок. Одна одруківка — і браузер ігнорує весь шаблон або кидає елемент у неявну клітинку.",
-      example: `/* кожен рядок — по 2 назви */
-grid-template-areas:
-  "head head"
-  "nav  main";`,
-      missionStory: "Хтось підправив план Гридбурга нашвидку — і вся площа з'їхала. Знайди помилки в кресленні.",
-      worldEvent: "Гридбург розплановано — місто стоїть рівними кварталами!",
-      taskType: "fix-markup",
-      prompt: "Макет зламано: в одному рядку шаблону бракує клітинки, а назва області в `nav` написана з помилкою. Виправ CSS, щоб `header` був зверху на всю ширину, а `nav` ліворуч від `main`.",
-      starterHtml: `<div class="layout">
-  <header>Гридбург</header>
-  <nav>Вулиці</nav>
-  <main>Квартали</main>
+    L(4, {
+      id: 19,
+      title: "Grid чи Flexbox",
+      concept: "Flexbox — одновимірний: розкладає елементи в рядок або стовпчик і добре працює, коли розмір задає вміст (меню, тулбар, картка всередині). Grid — двовимірний: керує рядками й колонками одночасно (макет сторінки, галерея, dashboard). На практиці їх поєднують: сітка сторінки на Grid, а всередині блоків — Flexbox.",
+      example: `.page { display: grid; grid-template-columns: 240px 1fr; } /* макет */
+.page header { display: flex; justify-content: space-between; } /* шапка */`,
+      missionStory: "Два архітектори Гридбурга сперечаються, чим будувати місто. Розсуди їх.",
+      worldEvent: "Архітектори поділили роботу між Grid і Flexbox.",
+      taskType: "multiple-choice",
+      prompt: "Яке твердження найточніше?",
+      options: [
+        "Flexbox — для розкладки в одному вимірі (рядок або стовпчик), Grid — для двовимірних макетів; їх часто поєднують",
+        "Grid застарів — сучасні сайти будують лише на Flexbox",
+        "Flexbox потрібен лише для центрування, усе інше — тільки на Grid",
+        "Grid і Flexbox не можна використовувати на одній сторінці",
+      ],
+      expectedAnswer: "Flexbox — для розкладки в одному вимірі (рядок або стовпчик), Grid — для двовимірних макетів; їх часто поєднують",
+      exampleLang: "css",
+      hint: "Подумай, скільки вимірів контролює кожен інструмент.",
+      difficulty: 1,
+    }),
+    L(4, {
+      id: 20,
+      title: "Практика: галерея",
+      concept: "Адаптивна галерея без медіазапитів: `grid-template-columns: repeat(auto-fill, minmax(160px, 1fr))`. Картинкам — `width: 100%`, однакові пропорції через `aspect-ratio` і `object-fit: cover`, щоб нічого не розтягувалось. Особливий кадр розтягують на дві колонки: `grid-column: span 2`.",
+      example: `.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+}
+.gallery img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }`,
+      missionStory: "Музей Гридбурга відкриває галерею фото острова. Кадри мають стояти рівно на будь-якому екрані.",
+      worldEvent: "Галерея Гридбурга відчинила двері.",
+      taskType: "write-markup",
+      prompt: "Зроби `.gallery` сіткою `repeat(auto-fill, minmax(160px, 1fr))` з проміжком `8px`; картинки — на всю ширину клітинки, пропорції `4 / 3`, `object-fit: cover`, `display: block`; кадр `.wide` займає 2 колонки.",
+      starterHtml: `<div class="gallery">
+  <img class="wide" src="panorama.svg" alt="Панорама острова">
+  <img src="harbor.svg" alt="Причал">
+  <img src="market.svg" alt="Ринок">
+  <img src="lighthouse.svg" alt="Маяк">
+  <img src="ship.svg" alt="Корабель">
+  <img src="plan.svg" alt="План міста">
 </div>
 `,
-      starterCss: `.layout {
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  grid-template-areas:
-    "top"
-    "menu content";
-}
-
-header { grid-area: top; }
-nav { grid-area: manu; }
-main { grid-area: content; }
-
-header, nav, main { padding: 8px; border: 1px solid #1b1612; }
+      starterCss: `/* галерея */
 `,
       testCases: [
-        { name: "header на всю ширину", check: (ctx) => ({ pass: near(ctx.rect("header").width, ctx.rect(".layout").width), actual: px(ctx.rect("header").width), expected: px(ctx.rect(".layout").width) }) },
-        { name: "nav ліворуч від main, 120px", check: (ctx) => { const n = ctx.rect("nav"), m = ctx.rect("main"); return { pass: near(n.top, m.top) && near(n.width, 120) && n.right <= m.left + 1, actual: "nav " + px(n.width) + ", top " + px(n.top - m.top) + " від main", expected: "nav 120px у рядку з main" }; } },
+        { name: "На 800px — 4 колонки", check: (ctx) => { const imgs = ctx.$$(".gallery img:not(.wide)").map((e) => ctx.rect(e)); const same = new Set(imgs.map((r) => Math.round(r.width))).size === 1; return eq(ctx, same ? Math.round((784 + 8) / (imgs[0].width + 8)) : 0, 4); } },
+        { name: "На 400px — 2 колонки", width: 400, check: (ctx) => { const r = ctx.rect(".gallery img:not(.wide)"); return eq(ctx, Math.round((384 + 8) / (r.width + 8)), 2); } },
+        { name: ".wide займає 2 колонки", check: (ctx) => { const w = ctx.rect(".wide").width, one = ctx.rect(".gallery img:not(.wide)").width; return { pass: near(w, one * 2 + 8), actual: px(w), expected: px(one * 2 + 8) }; } },
+        { name: "Пропорції 4:3", check: (ctx) => { const r = ctx.rect(".gallery img:not(.wide)"); return { pass: near(r.height / r.width, 0.75, 0.02), actual: px(r.width) + " × " + px(r.height), expected: "4 : 3" }; } },
       ],
-      solution: {
-        html: `<div class="layout">
-  <header>Гридбург</header>
-  <nav>Вулиці</nav>
-  <main>Квартали</main>
+      solution: { html: `<div class="gallery">
+  <img class="wide" src="panorama.svg" alt="Панорама острова">
+  <img src="harbor.svg" alt="Причал">
+  <img src="market.svg" alt="Ринок">
+  <img src="lighthouse.svg" alt="Маяк">
+  <img src="ship.svg" alt="Корабель">
+  <img src="plan.svg" alt="План міста">
 </div>
-`,
-        css: `.layout {
+`, css: `.gallery {
   display: grid;
-  grid-template-columns: 120px 1fr;
-  grid-template-areas:
-    "top top"
-    "menu content";
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
 }
 
-header { grid-area: top; }
-nav { grid-area: menu; }
-main { grid-area: content; }
+.gallery img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
 
-header, nav, main { padding: 8px; border: 1px solid #1b1612; }
+.gallery .wide {
+  grid-column: span 2;
+}
+` },
+      hint: "Пиши `.gallery .wide` — так правило буде специфічнішим за `.gallery img`. Пропорції — `aspect-ratio: 4 / 3`.",
+      difficulty: 2,
+    }),
+    L(4, {
+      id: 21,
+      title: "Практика: dashboard-лейаут",
+      concept: "Dashboard — ідеальний приклад поєднання: каркас (бокове меню на всю висоту, шапка, блоки графіка й таблиці) — на Grid з областями, а ряд карток статистики всередині — на Flexbox.",
+      example: `.dash {
+  display: grid;
+  grid-template-columns: 200px 1fr 1fr;
+  grid-template-areas:
+    "side top   top"
+    "side stats stats"
+    "side chart table";
+}
+.stats { display: flex; gap: 12px; }`,
+      missionStory: "Ратуша Гридбурга хоче панель керування містом: меню збоку, показники згори, графік і таблиця внизу.",
+      worldEvent: "Гридбург розплановано — місто стоїть рівними кварталами!",
+      taskType: "write-markup",
+      prompt: "Зверстай `.dash` на Grid: колонки `200px 1fr 1fr`, області — `side` (меню на всю висоту), `top` (шапка), `stats` (показники на дві колонки), `chart` і `table` поруч. Картки `.stat` у `.stats` — у рядок на Flexbox, рівної ширини, з `gap: 12px`.",
+      starterHtml: `<div class="dash">
+  <aside class="side">Меню</aside>
+  <header class="top">Панель міста</header>
+  <section class="stats">
+    <div class="stat">Мешканців: 1200</div>
+    <div class="stat">Будинків: 340</div>
+    <div class="stat">Мостів: 12</div>
+  </section>
+  <section class="chart">Графік</section>
+  <section class="table">Таблиця</section>
+</div>
 `,
-      },
-      hint: "Рядок `\"top\"` має мати дві назви, як і колонок дві: `\"top top\"`. А `manu` ≠ `menu`.",
+      starterCss: `.dash > * {
+  padding: 12px;
+  border: 1px solid #1b1612;
+  background: #f3eee2;
+}
+
+.stat {
+  padding: 8px;
+  background: #ffe061;
+}
+`,
+      testCases: [
+        { name: "Меню на всю висоту зліва (200px)", check: (ctx) => { const s = ctx.rect(".side"), t = ctx.rect(".top"), tb = ctx.rect(".table"); return { pass: near(s.width, 200) && near(s.top, t.top) && near(s.bottom, tb.bottom), actual: px(s.width) + ", від " + px(s.top) + " до " + px(s.bottom), expected: "200px, від шапки до низу таблиці" }; } },
+        { name: "Шапка й показники на дві колонки", check: (ctx) => { const t = ctx.rect(".top"), st = ctx.rect(".stats"), s = ctx.rect(".side"); return { pass: near(t.width, st.width) && t.left >= s.right - 1 && st.top > t.top, actual: px(t.width) + " / " + px(st.width), expected: "однакова ширина праворуч від меню" }; } },
+        { name: "Графік і таблиця поруч", check: (ctx) => { const c = ctx.rect(".chart"), t = ctx.rect(".table"); return { pass: near(c.top, t.top) && c.right <= t.left + 1 && near(c.width, t.width), actual: "top " + px(c.top) + " / " + px(t.top), expected: "в одному ряду, рівні" }; } },
+        { name: "Картки статистики в ряд на Flexbox, gap 12px", check: (ctx) => { const s = ctx.$$(".stat").map((e) => ctx.rect(e)); return { pass: ctx.style(".stats", "display") === "flex" && near(s[0].top, s[2].top) && near(s[0].width, s[1].width) && near(s[1].left - s[0].right, 12, 0.6), actual: ctx.style(".stats", "display") + ", проміжок " + px(s[1].left - s[0].right), expected: "flex, проміжок 12px" }; } },
+      ],
+      codeChecks: [
+        { re: /grid-template-areas/, label: "Каркас на grid-template-areas", in: "css" },
+        { re: /display\s*:\s*flex/, label: "Картки на Flexbox", in: "css" },
+      ],
+      solution: { html: `<div class="dash">
+  <aside class="side">Меню</aside>
+  <header class="top">Панель міста</header>
+  <section class="stats">
+    <div class="stat">Мешканців: 1200</div>
+    <div class="stat">Будинків: 340</div>
+    <div class="stat">Мостів: 12</div>
+  </section>
+  <section class="chart">Графік</section>
+  <section class="table">Таблиця</section>
+</div>
+`, css: `.dash {
+  display: grid;
+  grid-template-columns: 200px 1fr 1fr;
+  grid-template-areas:
+    "side top   top"
+    "side stats stats"
+    "side chart table";
+}
+
+.side { grid-area: side; }
+.top { grid-area: top; }
+.stats { grid-area: stats; display: flex; gap: 12px; }
+.chart { grid-area: chart; }
+.table { grid-area: table; }
+
+.dash > * {
+  padding: 12px;
+  border: 1px solid #1b1612;
+  background: #f3eee2;
+}
+
+.stat {
+  flex: 1;
+  padding: 8px;
+  background: #ffe061;
+}
+` },
+      hint: "Спершу шаблон областей на `.dash`, потім `grid-area` кожному блоку. Рівні картки — `flex: 1` на `.stat`.",
+      difficulty: 3,
+    }),
+
+    /* ───────────── 5. Маяк адаптивності ───────────── */
+    L(5, {
+      id: 22,
+      title: "Mobile-first",
+      concept: "Mobile-first: базові стилі пишуться для телефона (одна колонка), а ширші екрани додаються медіазапитами `@media (min-width: …)`. Так телефон не завантажує й не перекриває зайвих десктопних правил, а CSS читається як «від простого до складного».",
+      example: `.cards { display: grid; grid-template-columns: 1fr; }
+
+@media (min-width: 768px) {
+  .cards { grid-template-columns: repeat(3, 1fr); }
+}`,
+      missionStory: "Креслення маяка писали для великих екранів, а потім латали для телефонів. Переписуємо по-сучасному — з телефона.",
+      worldEvent: "Креслення маяка переписано з телефона.",
+      taskType: "fix-markup",
+      prompt: "Перепиши CSS у стилі mobile-first: базово — одна колонка, а від `768px` (`min-width`) — три колонки. Медіазапитів з `max-width` лишатися не повинно.",
+      starterHtml: `<div class="cards">
+  <article class="card">Промінь</article>
+  <article class="card">Лінза</article>
+  <article class="card">Сходи</article>
+</div>
+`,
+      starterCss: `.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 767px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card { padding: 16px; background: #f3eee2; }
+`,
+      testCases: [
+        { name: "На 400px — одна колонка", width: 400, check: (ctx) => eq(ctx, perRow(ctx, ".card"), 1) },
+        { name: "На 900px — три колонки", width: 900, check: (ctx) => eq(ctx, perRow(ctx, ".card"), 3) },
+      ],
+      codeChecks: [
+        { re: /@media\s*\(\s*min-width\s*:\s*768px\s*\)/, label: "Є @media (min-width: 768px)", in: "css" },
+        { re: /@media[^{]*max-width/, not: true, label: "Немає медіазапитів з max-width", in: "css" },
+      ],
+      solution: { html: `<div class="cards">
+  <article class="card">Промінь</article>
+  <article class="card">Лінза</article>
+  <article class="card">Сходи</article>
+</div>
+`, css: `.cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.card { padding: 16px; background: #f3eee2; }
+` },
+      hint: "Поміняй місцями: «одна колонка» стає базою, а «три колонки» переїжджають у `@media (min-width: 768px)`.",
+      difficulty: 2,
+    }),
+    L(5, {
+      id: 23,
+      title: "rem, em і %",
+      concept: "`rem` — від розміру шрифту `html` (зазвичай 16px): шрифти й відступи масштабуються з налаштуваннями користувача. `em` — від шрифту самого елемента: внутрішні відступи кнопки ростуть разом із її текстом. `%` — частка від батька.",
+      example: `.title { font-size: 2rem; }        /* 32px */
+.btn { font-size: 20px; padding: 0.5em 1em; } /* 10px 20px */
+.half { width: 50%; }`,
+      missionStory: "Вивіски маяка однакові на всіх екранах — і на величезних, і в людей, які збільшили шрифт. Час на відносні одиниці.",
+      worldEvent: "Вивіски маяка масштабуються разом із читачем.",
+      taskType: "write-markup",
+      prompt: "Задай: `.title` — `2rem`; `.note` — `0.875rem`; `.btn` (шрифт 20px уже задано) — відступи `0.5em 1em`; `.col` — ширина `50%` від `.row` (600px).",
+      starterHtml: `<h2 class="title">Маяк адаптивності</h2>
+<p class="note">Світло видно з будь-якого екрана.</p>
+<button class="btn" type="button">Запалити</button>
+<div class="row"><div class="col">Ліва половина</div></div>
+`,
+      starterCss: `html { font-size: 16px; }
+.btn { font-size: 20px; }
+.row { width: 600px; }
+.col { background: #ffe061; }
+`,
+      testCases: [
+        { name: ".title 32px, .note 14px", check: (ctx) => eq(ctx, ctx.style(".title", "font-size") + " " + ctx.style(".note", "font-size"), "32px 14px") },
+        { name: ".btn відступи 10px 20px", check: (ctx) => eq(ctx, ctx.style(".btn", "padding-top") + " " + ctx.style(".btn", "padding-left"), "10px 20px") },
+        { name: ".col — 300px", check: (ctx) => eq(ctx, px(ctx.rect(".col").width), "300px") },
+      ],
+      codeChecks: [
+        { re: /\.title[^{]*\{[^}]*2rem/, label: ".title у rem", in: "css" },
+        { re: /0\.5em\s+1em/, label: "Відступи кнопки в em", in: "css" },
+      ],
+      solution: { html: `<h2 class="title">Маяк адаптивності</h2>
+<p class="note">Світло видно з будь-якого екрана.</p>
+<button class="btn" type="button">Запалити</button>
+<div class="row"><div class="col">Ліва половина</div></div>
+`, css: `html { font-size: 16px; }
+.title { font-size: 2rem; }
+.note { font-size: 0.875rem; }
+.btn { font-size: 20px; padding: 0.5em 1em; }
+.row { width: 600px; }
+.col { width: 50%; background: #ffe061; }
+` },
+      hint: "0.875 × 16 = 14. Відступи кнопки в `em` рахуються від її власних 20px.",
+      difficulty: 2,
+    }),
+    L(5, {
+      id: 24,
+      title: "vw, vh і clamp()",
+      concept: "`vw`/`vh` — відсотки від ширини/висоти вікна. `clamp(мін, бажане, макс)` обмежує значення з обох боків: `clamp(24px, 5vw, 48px)` — шрифт росте разом з екраном, але не менше 24px і не більше 48px. Жодного медіазапиту.",
+      example: `h1 { font-size: clamp(24px, 5vw, 48px); }
+.hero { min-height: 60vh; }`,
+      missionStory: "Напис на маяку то крихітний на телефоні, то гігантський на моніторі. Нехай росте плавно, але в межах.",
+      worldEvent: "Напис на маяку завжди читабельний.",
+      taskType: "write-markup",
+      prompt: "Задай `h1` розмір `clamp(24px, 5vw, 48px)`, а `.hero` — мінімальну висоту `50vh`.",
+      starterHtml: `<section class="hero">
+  <h1>Маяк адаптивності</h1>
+</section>
+`,
+      starterCss: `.hero { background: #1f4a5a; color: white; }
+`,
+      testCases: [
+        { name: "На 400px — 24px (нижня межа)", width: 400, check: (ctx) => eq(ctx, ctx.style("h1", "font-size"), "24px") },
+        { name: "На 800px — 40px (5vw)", check: (ctx) => eq(ctx, ctx.style("h1", "font-size"), "40px") },
+        { name: "На 1200px — 48px (верхня межа)", width: 1200, check: (ctx) => eq(ctx, ctx.style("h1", "font-size"), "48px") },
+        { name: ".hero не нижче за половину вікна (300px)", check: (ctx) => ({ pass: ctx.rect(".hero").height >= 299.5, actual: px(ctx.rect(".hero").height), expected: "≥ 300px" }) },
+      ],
+      codeChecks: [{ re: /clamp\(/, label: "Використано clamp()", in: "css" }],
+      solution: { html: `<section class="hero">
+  <h1>Маяк адаптивності</h1>
+</section>
+`, css: `.hero { min-height: 50vh; background: #1f4a5a; color: white; }
+h1 { font-size: clamp(24px, 5vw, 48px); }
+` },
+      hint: "Вікно тесту — 600px заввишки, тож `50vh` = 300px.",
+      difficulty: 2,
+    }),
+    L(5, {
+      id: 25,
+      title: "Container queries",
+      concept: "Медіазапит дивиться на ширину вікна, а компонент може жити і у вузькій колонці, і на всю сторінку. Container queries дивляться на ширину батька: батьку дають `container-type: inline-size`, а стилі пишуть у `@container (min-width: 400px) { … }`. Компонент адаптується сам, де б його не вставили.",
+      example: `.slot { container-type: inline-size; }
+
+@container (min-width: 400px) {
+  .card { display: flex; gap: 12px; }
+}`,
+      missionStory: "Ту саму картку маяка вішають і на вузький стовп, і на широку стіну. На широкій вона має ставати горизонтальною — незалежно від екрана.",
+      worldEvent: "Картки маяка підлаштовуються під будь-яку стіну.",
+      taskType: "write-markup",
+      prompt: "Зроби кожен `.slot` контейнером (`container-type: inline-size`). Якщо контейнер має щонайменше `400px`, `.card` стає flex-рядком із `gap: 12px`; у вужчому — лишається блоком.",
+      starterHtml: `<div class="slot narrow">
+  <article class="card"><img src="ship.svg" alt="Корабель"><p>Вузький стовп</p></article>
+</div>
+<div class="slot wide">
+  <article class="card"><img src="ship.svg" alt="Корабель"><p>Широка стіна</p></article>
+</div>
+`,
+      starterCss: `.narrow { width: 300px; }
+.wide { width: 560px; }
+.card { background: #f3eee2; padding: 8px; }
+.card img { width: 120px; display: block; }
+`,
+      testCases: [
+        { name: "У вузькому контейнері картка — блок", check: (ctx) => eq(ctx, ctx.style(".narrow .card", "display"), "block") },
+        { name: "У широкому — flex із gap 12px", check: (ctx) => eq(ctx, ctx.style(".wide .card", "display") + " " + ctx.style(".wide .card", "column-gap"), "flex 12px") },
+      ],
+      codeChecks: [
+        { re: /container-type\s*:\s*inline-size/, label: "Задано container-type", in: "css" },
+        { re: /@container\s*\(\s*min-width\s*:\s*400px\s*\)/, label: "Є @container (min-width: 400px)", in: "css" },
+      ],
+      solution: { html: `<div class="slot narrow">
+  <article class="card"><img src="ship.svg" alt="Корабель"><p>Вузький стовп</p></article>
+</div>
+<div class="slot wide">
+  <article class="card"><img src="ship.svg" alt="Корабель"><p>Широка стіна</p></article>
+</div>
+`, css: `.slot { container-type: inline-size; }
+.narrow { width: 300px; }
+.wide { width: 560px; }
+.card { background: #f3eee2; padding: 8px; }
+.card img { width: 120px; display: block; }
+
+@container (min-width: 400px) {
+  .card {
+    display: flex;
+    gap: 12px;
+  }
+}
+` },
+      hint: "Контейнер — `.slot`, а стилізуємо `.card` всередині нього.",
+      difficulty: 3,
+    }),
+    L(5, {
+      id: 26,
+      title: "Тестування на екранах",
+      concept: "Режим пристроїв у DevTools швидко показує різні ширини й імітує дотики, але це все одно десктопний браузер на потужному комп'ютері. Справжній телефон покаже реальну швидкість, роботу пальцем, екранну клавіатуру, яка з'їдає пів екрана, і особливості мобільного Safari. Хороша практика — і те, і інше.",
+      example: `/* DevTools: Ctrl+Shift+M — режим пристроїв
+   + перевірка на реальному телефоні через локальну мережу */`,
+      exampleLang: "css",
+      missionStory: "Доглядач маяка перевіряє світло лише з вікна своєї вежі. Чи достатньо цього?",
+      worldEvent: "Маяк засяяв — острів видно з будь-якого екрана!",
+      taskType: "multiple-choice",
+      prompt: "Що режим пристроїв у DevTools НЕ покаже надійно?",
+      options: [
+        "Реальну швидкодію на слабкому телефоні, роботу пальцем і поведінку екранної клавіатури",
+        "Як виглядає сторінка на ширині 375px",
+        "Чи спрацьовують медіазапити на різних ширинах",
+        "Чи не з'являється горизонтальна прокрутка",
+      ],
+      expectedAnswer: "Реальну швидкодію на слабкому телефоні, роботу пальцем і поведінку екранної клавіатури",
+      hint: "DevTools імітує розмір екрана, але не залізо й не справжню взаємодію.",
+      difficulty: 1,
+    }),
+
+    /* ───────────── 6. Палітрова майстерня — CSS-змінні ───────────── */
+    L(6, {
+      id: 27,
+      title: "Змінні в :root",
+      concept: "Custom properties (`--назва: значення`) оголошують у `:root` — тоді вони доступні всій сторінці — і читають через `var(--назва)`. Кольори, відступи, радіуси задаються в одному місці: зміниш значення — зміниться весь сайт.",
+      example: `:root {
+  --color-primary: #e8663d;
+  --radius: 8px;
+}
+.btn {
+  background: var(--color-primary);
+  border-radius: var(--radius);
+}`,
+      missionStory: "Палітрова майстерня відкривається. Перший крок майстра — розкласти фарби по підписаних баночках.",
+      worldEvent: "Фарби майстерні розкладено по підписаних баночках.",
+      taskType: "write-markup",
+      prompt: "Оголоси в `:root` змінні `--color-primary: #e8663d`, `--radius: 8px`, `--space: 12px` і використай їх у `.btn`: фон, заокруглення кутів і внутрішній відступ.",
+      starterHtml: `<button class="btn" type="button">Змішати фарбу</button>
+`,
+      starterCss: `.btn {
+  border: 0;
+  color: white;
+}
+`,
+      testCases: [
+        { name: "Змінні оголошено в :root", check: (ctx) => { const r = ctx.win.getComputedStyle(ctx.doc.documentElement); const v = ["--color-primary", "--radius", "--space"].map((n) => r.getPropertyValue(n).trim()); return eq(ctx, v.join(" "), "#e8663d 8px 12px"); } },
+        { name: "Кнопка використовує змінні", check: (ctx) => eq(ctx, [ctx.style(".btn", "background-color"), ctx.style(".btn", "border-top-left-radius"), ctx.style(".btn", "padding-top")].join(" "), "rgb(232, 102, 61) 8px 12px") },
+      ],
+      codeChecks: [
+        { re: /var\(--color-primary\)/, label: "Кнопка читає var(--color-primary)", in: "css" },
+        { re: /var\(--space\)/, label: "Відступ із var(--space)", in: "css" },
+      ],
+      solution: { html: `<button class="btn" type="button">Змішати фарбу</button>
+`, css: `:root {
+  --color-primary: #e8663d;
+  --radius: 8px;
+  --space: 12px;
+}
+
+.btn {
+  background: var(--color-primary);
+  border-radius: var(--radius);
+  padding: var(--space);
+  border: 0;
+  color: white;
+}
+` },
+      hint: "Оголошення — `--space: 12px;` у `:root`, використання — `padding: var(--space);`.",
+      difficulty: 1,
+    }),
+    L(6, {
+      id: 28,
+      title: "Рефакторинг на змінні",
+      concept: "Захардкоджений колір, повторений у десяти місцях, — пастка: клієнт попросить інший відтінок, і ти щось пропустиш. Рефакторинг: винеси значення в змінну й заміни всі повтори на `var()`. Перевірка проста — зміни змінну, і весь сайт має перефарбуватися.",
+      example: `/* було */
+h1 { color: #2a85c4; } a { color: #2a85c4; }
+/* стало */
+:root { --accent: #2a85c4; }
+h1, a { color: var(--accent); }`,
+      missionStory: "Клієнт майстерні передумав щодо фірмового кольору. А він вписаний у стіни в чотирьох місцях…",
+      worldEvent: "Фірмовий колір майстерні тепер міняється одним рухом.",
+      taskType: "fix-markup",
+      prompt: "Заміни всі чотири повтори кольору `#2a85c4` змінною `--accent`, оголошеною в `:root`. Код `#2a85c4` має лишитися в CSS лише один раз — в оголошенні змінної.",
+      starterHtml: `<h1>Палітрова майстерня</h1>
+<a href="#order">Замовити</a>
+<button class="btn" type="button">Кошик</button>
+<div class="card">Акція тижня</div>
+`,
+      starterCss: `h1 { color: #2a85c4; }
+a { color: #2a85c4; }
+.btn { background: #2a85c4; color: white; border: 0; padding: 8px 12px; }
+.card { border-top: 4px solid #2a85c4; padding: 12px; background: #f3eee2; }
+`,
+      testCases: [
+        { name: "Зараз усе фірмового кольору", check: (ctx) => { const c = ctx.color("#2a85c4"); return eq(ctx, [ctx.style("h1", "color"), ctx.style("a", "color"), ctx.style(".btn", "background-color"), ctx.style(".card", "border-top-color")].every((v) => v === c), true); } },
+        { name: "Зміна --accent перефарбовує всі 4 місця", check: (ctx) => { ctx.doc.documentElement.style.setProperty("--accent", "rgb(255, 0, 0)"); const v = [ctx.style("h1", "color"), ctx.style("a", "color"), ctx.style(".btn", "background-color"), ctx.style(".card", "border-top-color")]; return { pass: v.every((x) => x === "rgb(255, 0, 0)"), actual: v.filter((x) => x === "rgb(255, 0, 0)").length + " з 4", expected: "4 з 4" }; } },
+        { name: "Колір записано лише один раз", check: (ctx) => eq(ctx, (ctx.css.replace(/\/\*[\s\S]*?\*\//g, "").match(/#2a85c4/gi) || []).length, 1) },
+      ],
+      solution: { html: `<h1>Палітрова майстерня</h1>
+<a href="#order">Замовити</a>
+<button class="btn" type="button">Кошик</button>
+<div class="card">Акція тижня</div>
+`, css: `:root { --accent: #2a85c4; }
+
+h1 { color: var(--accent); }
+a { color: var(--accent); }
+.btn { background: var(--accent); color: white; border: 0; padding: 8px 12px; }
+.card { border-top: 4px solid var(--accent); padding: 12px; background: #f3eee2; }
+` },
+      hint: "Додай `:root { --accent: #2a85c4; }`, потім заміни кожен `#2a85c4` нижче на `var(--accent)`.",
+      difficulty: 2,
+    }),
+    L(6, {
+      id: 29,
+      title: "Перемикач теми",
+      concept: "Темна тема на змінних: у `:root` — світлі значення, у `[data-theme=\"dark\"]` — темні. Увесь сайт читає лише змінні, тож скрипту досить поміняти один атрибут на `<html>`: `document.documentElement.dataset.theme = \"dark\"`.",
+      example: `:root { --bg: #ffffff; --text: #1b1612; }
+[data-theme="dark"] { --bg: #121314; --text: #f3f2ee; }
+body { background: var(--bg); color: var(--text); }`,
+      missionStory: "Майстерня працює і вдень, і вночі. Нічній зміні потрібна темна тема, що вмикається одним перемикачем.",
+      worldEvent: "Майстерня вміє перемикатися між днем і ніччю.",
+      taskType: "write-markup",
+      prompt: "Скрипт перемикача (`theme.js`, лише для читання) уже готовий: він ставить `data-theme=\"dark\"` на `<html>`. Напиши CSS: у `:root` — `--bg: #ffffff` і `--text: #1b1612`, у `[data-theme=\"dark\"]` — `--bg: #121314` і `--text: #f3f2ee`; `body` бере фон і колір тексту зі змінних.",
+      readonlyFiles: [{ name: "theme.js", code: `const toggle = document.querySelector(".theme-toggle");
+toggle.addEventListener("click", () => {
+  const root = document.documentElement;
+  root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+});` }],
+      starterHtml: `<header>
+  <button class="theme-toggle" type="button" aria-label="Перемкнути тему">◐</button>
+</header>
+<main>
+  <p>Нічна зміна палітрової майстерні.</p>
+</main>
+`,
+      starterCss: `/* змінні теми */
+`,
+      testCases: [
+        { name: "Світла тема за замовчуванням", check: (ctx) => eq(ctx, ctx.style("body", "background-color") + " / " + ctx.style("body", "color"), ctx.color("#ffffff") + " / " + ctx.color("#1b1612")) },
+        { name: "data-theme=\"dark\" вмикає темну", check: (ctx) => { ctx.doc.documentElement.dataset.theme = "dark"; return eq(ctx, ctx.style("body", "background-color") + " / " + ctx.style("body", "color"), ctx.color("#121314") + " / " + ctx.color("#f3f2ee")); } },
+      ],
+      codeChecks: [{ re: /\[data-theme=["']?dark["']?\]/, label: "Є правило [data-theme=\"dark\"]", in: "css" }],
+      solution: { html: `<header>
+  <button class="theme-toggle" type="button" aria-label="Перемкнути тему">◐</button>
+</header>
+<main>
+  <p>Нічна зміна палітрової майстерні.</p>
+</main>
+`, css: `:root {
+  --bg: #ffffff;
+  --text: #1b1612;
+}
+
+[data-theme="dark"] {
+  --bg: #121314;
+  --text: #f3f2ee;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+` },
+      hint: "Темні значення перевизначають ті самі змінні, а не стилі `body`.",
+      difficulty: 2,
+    }),
+    L(6, {
+      id: 30,
+      title: "Glassmorphism на змінних",
+      concept: "Скляний ефект — це напівпрозорий фон (`rgba`), розмиття того, що позаду (`backdrop-filter: blur()`), тонка світла рамка й заокруглення. Параметри зручно винести в змінні, щоб підкручувати «скло» в одному місці для всього дизайну.",
+      example: `:root { --glass-bg: rgba(255, 255, 255, 0.18); --glass-blur: 12px; }
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}`,
+      missionStory: "Вітрина майстерні має бути зі скла — крізь неї видно острів, але розмито, як у модних дизайнах.",
+      worldEvent: "Майстерня змішала палітру — острів міняє тему одним рухом!",
+      taskType: "write-markup",
+      prompt: "Оголоси `--glass-bg: rgba(255, 255, 255, 0.18)` і `--glass-blur: 12px` у `:root`. Зроби `.glass`: фон зі змінної, `backdrop-filter: blur(var(--glass-blur))`, рамка `1px solid rgba(255, 255, 255, 0.35)`, заокруглення `16px`.",
+      starterHtml: `<section class="scene">
+  <div class="glass">Скляна вітрина</div>
+</section>
+`,
+      starterCss: `.scene {
+  padding: 40px;
+  background: url("panorama.svg") center / cover;
+}
+
+.glass {
+  padding: 24px;
+  color: white;
+}
+`,
+      testCases: [
+        { name: "Розмиття позаду 12px", check: (ctx) => eq(ctx, ctx.style(".glass", "backdrop-filter"), "blur(12px)") },
+        { name: "Напівпрозорий фон 0.18", check: (ctx) => eq(ctx, ctx.style(".glass", "background-color"), "rgba(255, 255, 255, 0.18)") },
+        { name: "Рамка 1px і кути 16px", check: (ctx) => eq(ctx, ctx.style(".glass", "border-top-width") + " " + ctx.style(".glass", "border-top-left-radius"), "1px 16px") },
+      ],
+      codeChecks: [{ re: /var\(--glass-blur\)/, label: "Розмиття бере змінну --glass-blur", in: "css" }],
+      solution: { html: `<section class="scene">
+  <div class="glass">Скляна вітрина</div>
+</section>
+`, css: `:root {
+  --glass-bg: rgba(255, 255, 255, 0.18);
+  --glass-blur: 12px;
+}
+
+.scene {
+  padding: 40px;
+  background: url("panorama.svg") center / cover;
+}
+
+.glass {
+  padding: 24px;
+  color: white;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 16px;
+}
+` },
+      hint: "Усе потрібне — в одному правилі `.glass` плюс дві змінні в `:root`.",
       difficulty: 2,
     }),
 
-    /* ───────────── Маяк адаптивності ───────────── */
-    Object.assign({}, A8, {
-      id: 55,
-      title: "meta viewport",
-      concept: "Без тегу `<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">` мобільний браузер малює сторінку ніби на широкому екрані (~980px) і зменшує її — текст стає дрібним, а медіазапити не спрацьовують як треба.",
-      example: `<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-</head>`,
-      missionStory: "Маяк острова видно з кораблів, але на маленьких підзорних трубах світло розсіюється. Налаштуй лінзу для малих екранів.",
-      worldEvent: "Лінза маяка налаштована на малі підзорні труби.",
-      taskType: "multiple-choice",
-      prompt: "Який тег правильно налаштовує сторінку для мобільних екранів?",
-      optionsLang: "html",
-      options: [
-        `<meta name="viewport" content="width=device-width, initial-scale=1">`,
-        `<meta name="mobile" content="true">`,
-        `<meta viewport="device-width">`,
-        `<meta name="viewport" content="width=980">`,
+    /* ───────────── 7. Ярмарок анімацій — анімації та переходи ───────────── */
+    L(7, {
+      id: 31,
+      title: "transition",
+      concept: "`transition` плавно змінює властивість між двома станами (наприклад, звичайним і `:hover`): `transition: background-color 0.3s ease`. Перелічуй конкретні властивості замість `all` — так браузер не анімує зайвого, а ти контролюєш, що саме рухається.",
+      example: `.btn {
+  background: tomato;
+  transition: background-color 0.3s ease;
+}
+.btn:hover { background: crimson; }`,
+      missionStory: "Ярмаркові ліхтарі перемикаються різко, аж очі болять. Нехай кольори перетікають плавно.",
+      worldEvent: "Ліхтарі ярмарку засвітились плавно.",
+      taskType: "write-markup",
+      prompt: "Додай `.btn` плавний перехід лише кольору фону: `transition: background-color 0.3s ease`. Стан `:hover` уже є. Не використовуй `all`.",
+      starterHtml: `<a class="btn" href="#tickets">Квитки на ярмарок</a>
+`,
+      starterCss: `.btn {
+  display: inline-block;
+  padding: 10px 18px;
+  background: #e8663d;
+  color: #ffffff;
+}
+
+.btn:hover {
+  background: #c4472a;
+}
+`,
+      testCases: [
+        { name: "Анімується лише background-color", check: (ctx) => eq(ctx, ctx.style(".btn", "transition-property"), "background-color") },
+        { name: "Тривалість 0.3s, ease", check: (ctx) => eq(ctx, ctx.style(".btn", "transition-duration") + " " + ctx.style(".btn", "transition-timing-function"), "0.3s ease") },
       ],
-      expectedAnswer: `<meta name="viewport" content="width=device-width, initial-scale=1">`,
-      hint: "Ширина вікна має дорівнювати ширині пристрою, а масштаб — одиниці.",
+      codeChecks: [{ re: /transition[^;:]*:\s*all/, not: true, label: "Без transition: all", in: "css" }],
+      solution: { html: `<a class="btn" href="#tickets">Квитки на ярмарок</a>
+`, css: `.btn {
+  display: inline-block;
+  padding: 10px 18px;
+  background: #e8663d;
+  color: #ffffff;
+  transition: background-color 0.3s ease;
+}
+
+.btn:hover {
+  background: #c4472a;
+}
+` },
+      hint: "`transition` пишеться на звичайному стані `.btn`, а не на `:hover` — тоді перехід плавний в обидва боки.",
       difficulty: 1,
     }),
-    Object.assign({}, A8, {
-      id: 56,
-      title: "Медіазапити",
-      concept: "Медіазапит `@media (max-width: 600px) { … }` застосовує стилі лише тоді, коли вікно не ширше за 600px. Так одна сторінка має різний макет на телефоні й комп'ютері. Підхід «mobile first» починає з мобільних стилів і додає `min-width` для ширших екранів.",
-      example: `.menu { display: flex; }
-
-@media (max-width: 600px) {
-  .menu { flex-direction: column; }
-}`,
-      missionStory: "Меню маяка на великих екранах стоїть рядком, а на телефонах вилазить за край. Нехай на вузьких екранах воно стає стовпчиком.",
-      worldEvent: "Меню маяка зручне і на телефоні, і на великому екрані.",
+    L(7, {
+      id: 32,
+      title: "transform",
+      concept: "`transform` зсуває (`translate`), обертає (`rotate`), масштабує (`scale`) елемент, не чіпаючи розкладку: сусіди не зсуваються. Функції можна поєднувати: `transform: translateY(-10px) rotate(5deg)`. Порядок має значення — вони застосовуються справа наліво.",
+      example: `.tilt { transform: rotate(-5deg); }
+.grow { transform: scale(1.2); }
+.lift { transform: translateY(-10px); }`,
+      missionStory: "Вивіски ярмаркових ятер висять рівно й нудно. Нахили одну, збільш іншу, а третю підніми.",
+      worldEvent: "Ятки ярмарку отримали веселі вивіски.",
       taskType: "write-markup",
-      prompt: "Додай медіазапит: коли вікно не ширше за `600px`, `.menu` має ставати стовпчиком (`flex-direction: column`). На широкому екрані меню лишається рядком.",
+      prompt: "Задай: `.tilt` — поворот на `-5deg`, `.grow` — збільшення в `1.2` раза, `.lift` — підйом на `10px` угору (`translateY`). Сусідні ятки не мають зрушити з місця.",
+      starterHtml: `<div class="stalls">
+  <div class="stall tilt">Цукрова вата</div>
+  <div class="stall grow">Карусель</div>
+  <div class="stall lift">Тир</div>
+</div>
+`,
+      starterCss: `.stalls {
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+}
+
+.stall {
+  padding: 12px;
+  background: #ffe061;
+}
+`,
+      testCases: [
+        { name: ".tilt повернуто на -5°", check: (ctx) => eq(ctx, ctx.transform(".tilt").angle, -5) },
+        { name: ".grow збільшено в 1.2 раза", check: (ctx) => eq(ctx, ctx.transform(".grow").scaleX, 1.2) },
+        { name: ".lift піднято на 10px", check: (ctx) => eq(ctx, ctx.transform(".lift").y, -10) },
+        { name: "Розкладка не змінилась (лише transform)", check: (ctx) => eq(ctx, ["top", "margin-top", "position"].map((p) => ctx.style(".lift", p)).join(" "), "auto 0px static") },
+      ],
+      solution: { html: `<div class="stalls">
+  <div class="stall tilt">Цукрова вата</div>
+  <div class="stall grow">Карусель</div>
+  <div class="stall lift">Тир</div>
+</div>
+`, css: `.stalls {
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+}
+
+.stall {
+  padding: 12px;
+  background: #ffe061;
+}
+
+.tilt { transform: rotate(-5deg); }
+.grow { transform: scale(1.2); }
+.lift { transform: translateY(-10px); }
+` },
+      hint: "Угору — це від'ємне значення: `translateY(-10px)`.",
+      difficulty: 1,
+    }),
+    L(7, {
+      id: 33,
+      title: "@keyframes",
+      concept: "`@keyframes` описує анімацію покадрово (`0%`, `50%`, `100%` або `from`/`to`), а властивість `animation` запускає її: назва, тривалість, плавність, кількість повторів. `infinite` — безкінечно, `alternate` — туди й назад.",
+      example: `@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+}
+.balloon { animation: float 3s ease-in-out infinite; }`,
+      missionStory: "Повітряна куля ярмарку стоїть на землі, мов камінь. Нехай погойдується в повітрі.",
+      worldEvent: "Над ярмарком погойдується повітряна куля.",
+      taskType: "write-markup",
+      prompt: "Створи `@keyframes float`: на `0%` і `100%` — `translateY(0)`, на `50%` — `translateY(-20px)`. Запусти на `.balloon`: `3s`, `ease-in-out`, безкінечно.",
+      starterHtml: `<div class="sky">
+  <div class="balloon">🎈</div>
+</div>
+`,
+      starterCss: `.sky {
+  height: 160px;
+  padding-top: 40px;
+  background: #cfe8f7;
+}
+
+.balloon {
+  width: 60px;
+  font-size: 48px;
+}
+`,
+      testCases: [
+        { name: "@keyframes float з кадром 50% → translateY(-20px)", check: (ctx) => { const k = ctx.keyframes("float"); const mid = k && k.findRule("50%"); return { pass: !!mid && mid.style.transform === "translateY(-20px)" && Array.from(k.cssRules).some((r) => /(^|,s*)(0%|from)/.test(r.keyText)), actual: k ? (mid ? "50%: " + mid.style.transform : "немає кадру 50%") : "keyframes float немає", expected: "50%: translateY(-20px)" }; } },
+        { name: ".balloon: float 3s ease-in-out infinite", check: (ctx) => eq(ctx, ["animation-name", "animation-duration", "animation-timing-function", "animation-iteration-count"].map((p) => ruleProp(ctx, /^.balloon$/, p)).join(" "), "float 3s ease-in-out infinite") },
+      ],
+      solution: { html: `<div class="sky">
+  <div class="balloon">🎈</div>
+</div>
+`, css: `.sky {
+  height: 160px;
+  padding-top: 40px;
+  background: #cfe8f7;
+}
+
+.balloon {
+  width: 60px;
+  font-size: 48px;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+` },
+      hint: "Кадри 0% і 100% можна записати разом: `0%, 100% { … }`.",
+      difficulty: 2,
+    }),
+    L(7, {
+      id: 34,
+      title: "Практика: hover-картка",
+      concept: "Жива картка товару: при наведенні вона піднімається (`transform: translateY`) і отримує тінь, а фото всередині трохи збільшується (`scale`), не вилазячи за краї завдяки `overflow: hidden`. Анімуємо лише `transform` і `box-shadow` — розкладка сторінки не стрибає.",
+      example: `.card { overflow: hidden; transition: transform 0.3s, box-shadow 0.3s; }
+.card:hover { transform: translateY(-6px); box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2); }
+.card:hover img { transform: scale(1.1); }`,
+      missionStory: "Ятка сувенірів хоче, щоб кожен товар «підстрибував» назустріч покупцю.",
+      worldEvent: "Сувеніри ярмарку підстрибують назустріч гостям.",
+      taskType: "write-markup",
+      prompt: "`.card`: `overflow: hidden`, перехід для `transform` і `box-shadow` (`0.3s`). `.card:hover` — `translateY(-6px)` і тінь `0 12px 24px rgba(0, 0, 0, 0.2)`. `.card:hover img` — `scale(1.1)`; самому `img` теж додай перехід `transform 0.3s`.",
+      starterHtml: `<article class="card">
+  <img src="market.svg" alt="Сувенірна ятка">
+  <h3>Сувенір «Карусель»</h3>
+</article>
+`,
+      starterCss: `.card {
+  width: 240px;
+  background: #ffffff;
+  border: 1px solid #e2cf8e;
+}
+
+.card img {
+  display: block;
+  width: 100%;
+}
+`,
+      testCases: [
+        { name: ".card: overflow hidden і перехід transform + box-shadow", check: (ctx) => { const p = ctx.style(".card", "transition-property"); return { pass: ctx.style(".card", "overflow") === "hidden" && /transform/.test(p) && /box-shadow/.test(p), actual: ctx.style(".card", "overflow") + "; " + p, expected: "hidden; transform, box-shadow" }; } },
+        { name: ".card:hover піднімає й дає тінь", check: (ctx) => { const t = ruleProp(ctx, /^\.card:hover$/, "transform"), s = ruleProp(ctx, /^\.card:hover$/, "box-shadow"); return { pass: t === "translateY(-6px)" && /12px 24px/.test(s), actual: (t || "—") + "; " + (s || "—"), expected: "translateY(-6px); 0 12px 24px …" }; } },
+        { name: "Фото збільшується при наведенні, плавно", check: (ctx) => { const t = ruleProp(ctx, /^\.card:hover img$/, "transform"); return { pass: t === "scale(1.1)" && /transform/.test(ctx.style(".card img", "transition-property")), actual: (t || "—") + "; перехід: " + ctx.style(".card img", "transition-property"), expected: "scale(1.1); перехід: transform" }; } },
+      ],
+      solution: { html: `<article class="card">
+  <img src="market.svg" alt="Сувенірна ятка">
+  <h3>Сувенір «Карусель»</h3>
+</article>
+`, css: `.card {
+  width: 240px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #e2cf8e;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+
+.card img {
+  display: block;
+  width: 100%;
+  transition: transform 0.3s;
+}
+
+.card:hover img {
+  transform: scale(1.1);
+}
+` },
+      hint: "Перехід — на звичайних станах (`.card`, `.card img`), нові значення — на `:hover`.",
+      difficulty: 2,
+    }),
+    L(7, {
+      id: 35,
+      title: "Практика: анімована кнопка",
+      concept: "Хороша анімована кнопка «відгукується» на натискання (`:active` → `scale(0.95)`), а пульсація привертає увагу. Але частину людей рух нудить чи відволікає: вони вмикають у системі «зменшити рух». Медіазапит `@media (prefers-reduced-motion: reduce)` вимикає для них анімації та переходи.",
+      example: `@media (prefers-reduced-motion: reduce) {
+  .btn {
+    animation: none;
+    transition: none;
+  }
+}`,
+      missionStory: "Головна кнопка ярмарку «Купити квиток» має пульсувати й пружинити — але не мучити тих, кому рух шкодить.",
+      worldEvent: "Ярмарок ожив — каруселі крутяться, кулі злітають!",
+      taskType: "write-markup",
+      prompt: "`.btn`: `transition: transform 0.15s`; `.btn:active` — `scale(0.95)`. Створи `@keyframes pulse` (на `50%` — `scale(1.05)`) і запусти на `.btn--pulse`: `pulse 2s infinite`. У `@media (prefers-reduced-motion: reduce)` вимкни для `.btn` і `.btn--pulse` і `animation`, і `transition` (`none`).",
+      starterHtml: `<button class="btn btn--pulse" type="button">Купити квиток</button>
+`,
+      starterCss: `.btn {
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: #e8663d;
+  color: #ffffff;
+  font: inherit;
+}
+`,
+      testCases: [
+        { name: ":active стискає кнопку до 0.95", check: (ctx) => eq(ctx, ruleProp(ctx, /\.btn:active/, "transform"), "scale(0.95)") },
+        { name: ".btn--pulse пульсує: pulse 2s infinite", check: (ctx) => { const k = ctx.keyframes("pulse"); const mid = k && k.findRule("50%"); const a = ["animation-name", "animation-duration", "animation-iteration-count"].map((p) => ruleProp(ctx, /^.btn--pulse$/, p)).join(" "); return { pass: !!mid && mid.style.transform === "scale(1.05)" && a === "pulse 2s infinite", actual: (a.trim() || "анімації немає") + (mid ? "" : ", кадру 50% немає"), expected: "pulse 2s infinite" }; } },
+        { name: "prefers-reduced-motion вимикає анімацію й перехід", check: (ctx) => { const inMedia = ctx.rules(/\.btn/).filter((r) => r.media && /prefers-reduced-motion:\s*reduce/.test(r.media)); const anim = inMedia.some((r) => /btn--pulse/.test(r.rule.selectorText) && r.rule.style.getPropertyValue("animation-name") === "none"); const tr = inMedia.some((r) => /\.btn(?![\w-])/.test(r.rule.selectorText) && r.rule.style.getPropertyValue("transition-property") === "none"); return { pass: anim && tr, actual: "анімація: " + (anim ? "вимкнено" : "ні") + ", перехід: " + (tr ? "вимкнено" : "ні"), expected: "анімація: вимкнено, перехід: вимкнено" }; } },
+      ],
+      solution: { html: `<button class="btn btn--pulse" type="button">Купити квиток</button>
+`, css: `.btn {
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: #e8663d;
+  color: #ffffff;
+  font: inherit;
+  transition: transform 0.15s;
+}
+
+.btn:active {
+  transform: scale(0.95);
+}
+
+.btn--pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .btn--pulse {
+    animation: none;
+    transition: none;
+  }
+}
+` },
+      hint: "Кадри 0% і 100% можна не писати — браузер візьме звичайний стан. Медіазапит — у самому кінці файлу.",
+      difficulty: 3,
+    }),
+
+    /* ───────────── 8. Сад доступності — a11y ───────────── */
+    L(8, {
+      id: 36,
+      title: "ARIA-атрибути",
+      concept: "Кнопка-іконка «✕» для програми читання екрана — просто «кнопка». `aria-label` дає їй назву («Закрити»). Декоративні іконки біля тексту ховають від озвучення: `aria-hidden=\"true\"`. `aria-current=\"page\"` позначає поточну сторінку в меню, а `aria-label` на `nav` відрізняє кілька навігацій. Головне правило ARIA: спершу правильний HTML-тег, ARIA — лише там, де тегу не вистачає.",
+      example: `<button aria-label="Закрити">✕</button>
+<a href="/"><span aria-hidden="true">🏠</span> Головна</a>
+<a href="/garden" aria-current="page">Сад</a>`,
+      missionStory: "Незряча гостя саду чує лише «кнопка, кнопка, квітка, кнопка». Дамо кожному елементу зрозумілий голос.",
+      worldEvent: "Сад заговорив зрозумілою мовою.",
+      taskType: "fix-markup",
+      prompt: "Дай кожній `.icon-btn` назву через `aria-label`; сховай декоративні `.icon` від озвучення (`aria-hidden=\"true\"`); познач поточний пункт меню `.is-active` як `aria-current=\"page\"`; дай `nav` назву `aria-label=\"Головне меню\"`.",
+      starterHtml: `<header class="bar">
+  <button class="icon-btn" type="button">☰</button>
+  <a class="logo" href="#"><span class="icon">🌸</span> Сад доступності</a>
+  <button class="icon-btn" type="button">🔍</button>
+</header>
+<nav>
+  <a class="is-active" href="#paths">Стежки</a>
+  <a href="#benches">Лавки</a>
+</nav>
+<div class="notice">
+  <p>Сад відкрито щодня.</p>
+  <button class="icon-btn" type="button">✕</button>
+</div>
+`,
+      starterCss: null,
+      testCases: [
+        { name: "Кожна кнопка-іконка має aria-label", check: (ctx) => { const miss = ctx.$$(".icon-btn").filter((b) => (b.getAttribute("aria-label") || "").trim().length < 3); return { pass: !miss.length, actual: miss.length ? "без назви: " + miss.map((b) => b.textContent.trim()).join(" ") : "усі з назвою", expected: "усі з назвою" }; } },
+        { name: "Декоративні іконки приховано", check: (ctx) => eq(ctx, ctx.$$(".icon").every((i) => i.getAttribute("aria-hidden") === "true"), true) },
+        { name: "Поточний пункт — aria-current=\"page\"", check: (ctx) => eq(ctx, ctx.attr(".is-active", "aria-current"), "page") },
+        { name: "nav має aria-label", check: (ctx) => eq(ctx, ctx.attr("nav", "aria-label"), "Головне меню") },
+      ],
+      solution: { html: `<header class="bar">
+  <button class="icon-btn" type="button" aria-label="Відкрити меню">☰</button>
+  <a class="logo" href="#"><span class="icon" aria-hidden="true">🌸</span> Сад доступності</a>
+  <button class="icon-btn" type="button" aria-label="Пошук">🔍</button>
+</header>
+<nav aria-label="Головне меню">
+  <a class="is-active" href="#paths" aria-current="page">Стежки</a>
+  <a href="#benches">Лавки</a>
+</nav>
+<div class="notice">
+  <p>Сад відкрито щодня.</p>
+  <button class="icon-btn" type="button" aria-label="Закрити">✕</button>
+</div>
+` },
+      hint: "Назва кнопки має описувати дію: «Відкрити меню», «Пошук», «Закрити».",
+      difficulty: 1,
+    }),
+    L(8, {
+      id: 37,
+      title: "Контраст кольорів",
+      concept: "WCAG вимагає контраст тексту з фоном щонайменше 4.5 : 1 для звичайного тексту (3 : 1 — для великого). Світло-сірий на білому чи білий на жовтому виглядають «стильно», але погано читаються на сонці, на слабкому екрані й людьми зі слабким зором. Перевірити можна в DevTools: інспектор показує контраст поруч із кольором.",
+      example: `/* 2.3 : 1 — погано */ color: #aaaaaa;
+/* 7.0 : 1 — добре  */ color: #595959;`,
+      missionStory: "Таблички в саду вицвіли: сірі літери на білому, білі на жовтому. Гості мружаться й проходять повз.",
+      worldEvent: "Таблички саду читаються навіть на сонці.",
+      taskType: "fix-markup",
+      prompt: "Зміни лише колір тексту (`color`), щоб `.muted`, `.btn` і `.note` мали контраст щонайменше 4.5 з їхнім фоном. Фони не чіпай.",
+      starterHtml: `<p class="muted">Вхід вільний для всіх гостей.</p>
+<a class="btn" href="#tour">Екскурсія</a>
+<div class="dark-card">
+  <p class="note">Сад працює з 8:00 до 20:00.</p>
+</div>
+`,
+      starterCss: `.muted { color: #aaaaaa; }
+
+.btn {
+  display: inline-block;
+  padding: 10px 16px;
+  background: #f7b733;
+  color: #ffffff;
+}
+
+.dark-card {
+  padding: 16px;
+  background: #2a2f36;
+}
+
+.note { color: #555b63; }
+`,
+      testCases: [
+        { name: ".muted ≥ 4.5", check: (ctx) => ({ pass: ctx.contrast(".muted") >= 4.5, actual: ctx.contrast(".muted") + " : 1", expected: "≥ 4.5 : 1" }) },
+        { name: ".btn ≥ 4.5", check: (ctx) => ({ pass: ctx.contrast(".btn") >= 4.5, actual: ctx.contrast(".btn") + " : 1", expected: "≥ 4.5 : 1" }) },
+        { name: ".note ≥ 4.5", check: (ctx) => ({ pass: ctx.contrast(".note") >= 4.5, actual: ctx.contrast(".note") + " : 1", expected: "≥ 4.5 : 1" }) },
+        { name: "Фони не змінено", check: (ctx) => eq(ctx, ctx.style(".btn", "background-color") + " / " + ctx.style(".dark-card", "background-color"), "rgb(247, 183, 51) / rgb(42, 47, 54)") },
+      ],
+      solution: { html: `<p class="muted">Вхід вільний для всіх гостей.</p>
+<a class="btn" href="#tour">Екскурсія</a>
+<div class="dark-card">
+  <p class="note">Сад працює з 8:00 до 20:00.</p>
+</div>
+`, css: `.muted { color: #595959; }
+
+.btn {
+  display: inline-block;
+  padding: 10px 16px;
+  background: #f7b733;
+  color: #1b1612;
+}
+
+.dark-card {
+  padding: 16px;
+  background: #2a2f36;
+}
+
+.note { color: #e6e6e6; }
+` },
+      hint: "На світлому фоні текст має бути темним, на темному — світлим. На жовтій кнопці білий текст не врятувати — зроби його темним.",
+      difficulty: 2,
+    }),
+    L(8, {
+      id: 38,
+      title: "Клавіатурна навігація",
+      concept: "Сайтом мають користуватися без миші. `div` з обробником кліку не отримує фокус і не натискається Enter — бери `button`. `tabindex` більший за 0 ламає природний порядок Tab — не використовуй його. Skip-link («Перейти до вмісту») — перше посилання сторінки, сховане до фокуса: воно дає перестрибнути меню одразу до `main`.",
+      example: `<a class="skip-link" href="#main">Перейти до вмісту</a>
+<header>…меню…</header>
+<main id="main">…</main>`,
+      missionStory: "Гість саду ходить сторінкою лише клавішею Tab — і застрягає: ворота не відчиняються, а фокус стрибає хаотично.",
+      worldEvent: "Сад можна обійти без жодної миші.",
+      taskType: "fix-markup",
+      prompt: "Додай першим елементом сторінки `<a class=\"skip-link\" href=\"#main\">Перейти до вмісту</a>` і дай `main` `id=\"main\"`; заміни `div.btn` на справжній `button` (`type=\"button\"`); прибери `tabindex=\"3\"`. CSS для skip-link уже готовий.",
+      starterHtml: `<header>
+  <a class="logo" href="#">Сад доступності</a>
+  <nav>
+    <a href="#paths">Стежки</a>
+    <a href="#map" tabindex="3">Мапа</a>
+  </nav>
+</header>
+<main>
+  <h1>Ласкаво просимо</h1>
+  <div class="btn" data-action="open-gate">Відчинити ворота</div>
+</main>
+`,
+      starterCss: `.skip-link {
+  position: absolute;
+  top: 8px;
+  left: -9999px;
+  padding: 8px 12px;
+  background: #1b1612;
+  color: #ffffff;
+}
+
+.skip-link:focus {
+  left: 8px;
+}
+
+.btn {
+  padding: 10px 16px;
+  border: 0;
+  background: #3f8530;
+  color: #ffffff;
+  font: inherit;
+}
+`,
+      testCases: [
+        { name: "Перший елемент — skip-link на #main", check: (ctx) => { const f = ctx.$("body > :first-child"); return { pass: !!f && f.matches("a.skip-link") && f.getAttribute("href") === "#main", actual: f ? ctx.show(f.outerHTML.slice(0, 60)) : "порожньо", expected: '<a class="skip-link" href="#main">' }; } },
+        { name: "main має id=\"main\"", check: (ctx) => eq(ctx, ctx.$("#main") ? ctx.$("#main").tagName.toLowerCase() : null, "main") },
+        { name: ".btn — справжня кнопка", check: (ctx) => eq(ctx, ctx.$(".btn") ? ctx.$(".btn").tagName.toLowerCase() + " " + ctx.$(".btn").type : null, "button button") },
+        { name: "Немає tabindex > 0", check: (ctx) => eq(ctx, ctx.$$("[tabindex]").filter((e) => Number(e.getAttribute("tabindex")) > 0).length, 0) },
+      ],
+      solution: { html: `<a class="skip-link" href="#main">Перейти до вмісту</a>
+<header>
+  <a class="logo" href="#">Сад доступності</a>
+  <nav>
+    <a href="#paths">Стежки</a>
+    <a href="#map">Мапа</a>
+  </nav>
+</header>
+<main id="main">
+  <h1>Ласкаво просимо</h1>
+  <button class="btn" type="button" data-action="open-gate">Відчинити ворота</button>
+</main>
+`, css: `.skip-link {
+  position: absolute;
+  top: 8px;
+  left: -9999px;
+  padding: 8px 12px;
+  background: #1b1612;
+  color: #ffffff;
+}
+
+.skip-link:focus {
+  left: 8px;
+}
+
+.btn {
+  padding: 10px 16px;
+  border: 0;
+  background: #3f8530;
+  color: #ffffff;
+  font: inherit;
+}
+` },
+      hint: "Skip-link — найперший рядок HTML, ще до `header`.",
+      difficulty: 2,
+    }),
+    L(8, {
+      id: 39,
+      title: "Видимий фокус",
+      concept: "`*:focus { outline: none }` — одна з найшкідливіших стрічок CSS: людина з клавіатурою перестає бачити, де вона. Правильно — стилізувати фокус через `:focus-visible`: кільце з'являється при навігації клавіатурою, але не заважає при кліку мишею. `outline-offset` відсуває кільце від краю.",
+      example: `:focus-visible {
+  outline: 3px solid #1f6feb;
+  outline-offset: 2px;
+}`,
+      missionStory: "Хтось «прибрав некрасиві рамки» в саду — і тепер гості з клавіатурою блукають наосліп.",
+      worldEvent: "Сад відкрито для кожного гостя острова!",
+      taskType: "fix-markup",
+      prompt: "Прибери правило, що ховає фокус, і додай `:focus-visible` з `outline: 3px solid #1f6feb` та `outline-offset: 2px`.",
+      starterHtml: `<nav>
+  <a href="#roses">Троянди</a>
+  <a href="#lilies">Лілії</a>
+</nav>
+<button class="btn" type="button">Замовити екскурсію</button>
+`,
+      starterCss: `*:focus {
+  outline: none;
+}
+
+a,
+button {
+  color: #1b1612;
+}
+
+.btn {
+  padding: 10px 16px;
+  border: 0;
+  background: #ffe061;
+  font: inherit;
+}
+`,
+      testCases: [
+        { name: "Фокус більше не прихований", check: (ctx) => { const bad = ctx.rules(/:focus(?!-)/).filter((r) => r.rule.style.getPropertyValue("outline-style") === "none" || r.rule.style.getPropertyValue("outline-width") === "0px"); return { pass: !bad.length, actual: bad.length ? bad[0].rule.selectorText + " ховає outline" : "нічого не ховає", expected: "нічого не ховає" }; } },
+        { name: ":focus-visible — 3px solid #1f6feb, відступ 2px", check: (ctx) => { const g = (p) => ruleProp(ctx, /:focus-visible/, p); return { pass: g("outline-width") === "3px" && g("outline-style") === "solid" && ctx.color(g("outline-color")) === ctx.color("#1f6feb") && g("outline-offset") === "2px", actual: g("outline-width") ? [g("outline-width"), g("outline-style"), g("outline-color"), "offset " + g("outline-offset")].join(" ") : "правила :focus-visible немає", expected: "3px solid #1f6feb offset 2px" }; } },
+      ],
+      codeChecks: [{ re: /outline\s*:\s*(none|0)\b/, not: true, label: "Немає outline: none", in: "css" }],
+      solution: { html: `<nav>
+  <a href="#roses">Троянди</a>
+  <a href="#lilies">Лілії</a>
+</nav>
+<button class="btn" type="button">Замовити екскурсію</button>
+`, css: `:focus-visible {
+  outline: 3px solid #1f6feb;
+  outline-offset: 2px;
+}
+
+a,
+button {
+  color: #1b1612;
+}
+
+.btn {
+  padding: 10px 16px;
+  border: 0;
+  background: #ffe061;
+  font: inherit;
+}
+` },
+      hint: "Видали правило `*:focus` повністю й напиши нове з `:focus-visible`.",
+      difficulty: 1,
+    }),
+
+    /* ───────────── 9. Вітряки швидкості — продуктивність ───────────── */
+    L(9, {
+      id: 40,
+      title: "Ліниве завантаження зображень",
+      concept: "`loading=\"lazy\"` відкладає завантаження картинок нижче першого екрана, доки користувач до них не догорне. Але першу (видиму одразу) картинку робити лінивою не можна — вона з'явиться пізніше. Атрибути `width` і `height` дають браузеру пропорції наперед, щоб сторінка не «стрибала», коли картинки довантажуються (CLS).",
+      example: `<img src="hero.jpg" alt="…" width="1200" height="600">
+<img src="photo.jpg" alt="…" width="400" height="300" loading="lazy">`,
+      missionStory: "Сторінка вітряків вантажить усі фото одразу й смикається, коли вони з'являються. Мельник нервує.",
+      worldEvent: "Сторінка вітряків більше не смикається.",
+      taskType: "fix-markup",
+      prompt: "Усім картинкам додай `width` і `height` (розміри: `harbor`, `market`, `lighthouse` — 400×250, `ship` — 300×200). Усі, крім першої, зроби лінивими (`loading=\"lazy\"`); першу — ні.",
+      starterHtml: `<img src="harbor.svg" alt="Причал біля вітряків">
+<h2>Наші вітряки</h2>
+<img src="market.svg" alt="Ринок борошна">
+<img src="lighthouse.svg" alt="Маяк на мисі">
+<img src="ship.svg" alt="Корабель із зерном">
+`,
+      starterCss: `img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+`,
+      testCases: [
+        { name: "Перша картинка завантажується одразу", check: (ctx) => eq(ctx, ctx.$("img").getAttribute("loading") === "lazy", false) },
+        { name: "Решта — loading=\"lazy\"", check: (ctx) => eq(ctx, ctx.$$("img").slice(1).map((i) => i.getAttribute("loading") || "—").join(" "), "lazy lazy lazy") },
+        { name: "Розміри width і height у всіх", check: (ctx) => eq(ctx, ctx.$$("img").map((i) => (i.getAttribute("width") || "?") + "×" + (i.getAttribute("height") || "?")).join(" "), "400×250 400×250 400×250 300×200") },
+      ],
+      solution: { html: `<img src="harbor.svg" alt="Причал біля вітряків" width="400" height="250">
+<h2>Наші вітряки</h2>
+<img src="market.svg" alt="Ринок борошна" width="400" height="250" loading="lazy">
+<img src="lighthouse.svg" alt="Маяк на мисі" width="400" height="250" loading="lazy">
+<img src="ship.svg" alt="Корабель із зерном" width="300" height="200" loading="lazy">
+`, css: `img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+` },
+      hint: "`width` і `height` — числа без `px`. CSS `height: auto` збереже адаптивність.",
+      difficulty: 1,
+    }),
+    L(9, {
+      id: 41,
+      title: "Шрифти: font-display",
+      concept: "Поки вебшрифт вантажиться, браузер може ховати текст (FOIT) — сторінка «порожня». `font-display: swap` у `@font-face` одразу показує текст запасним шрифтом і підміняє його, коли вебшрифт завантажиться. А в `font-family` завжди пиши запасний ланцюжок, що закінчується загальним сімейством (`serif`, `sans-serif`).",
+      example: `@font-face {
+  font-family: "Mill";
+  src: url("mill.woff2") format("woff2");
+  font-display: swap;
+}
+body { font-family: "Mill", Georgia, serif; }`,
+      missionStory: "Поки вантажиться фірмовий шрифт вітряків, гості бачать порожні таблички. Нехай текст буде видно одразу.",
+      worldEvent: "Таблички вітряків видно ще до завантаження шрифту.",
+      taskType: "fix-markup",
+      prompt: "Додай у `@font-face` `font-display: swap`, а `body` дай ланцюжок `\"Island\", Georgia, serif`. (`local(\"Georgia\")` у `src` — шрифт, установлений у системі: якщо він є, файл не завантажується.)",
+      starterHtml: `<h1>Вітряки швидкості</h1>
+<p>Мелемо борошно щодня з шостої ранку.</p>
+`,
+      starterCss: `@font-face {
+  font-family: "Island";
+  src: local("Georgia"), url("island.woff2") format("woff2");
+}
+
+body {
+  font-family: "Island";
+}
+`,
+      testCases: [
+        { name: "@font-face «Island» з font-display: swap", check: (ctx) => { const f = ctx.atRules("CSSFontFaceRule").find((r) => /Island/.test(r.style.getPropertyValue("font-family"))); return { pass: !!f && f.style.getPropertyValue("font-display") === "swap", actual: f ? "font-display: " + (f.style.getPropertyValue("font-display") || "—") : "@font-face немає", expected: "font-display: swap" }; } },
+        { name: "Запасний ланцюжок шрифтів", check: (ctx) => { const v = ctx.style("body", "font-family"); return { pass: /^"?Island"?,\s*Georgia,\s*serif$/.test(v), actual: v, expected: "\"Island\", Georgia, serif" }; } },
+      ],
+      solution: { html: `<h1>Вітряки швидкості</h1>
+<p>Мелемо борошно щодня з шостої ранку.</p>
+`, css: `@font-face {
+  font-family: "Island";
+  src: local("Georgia"), url("island.woff2") format("woff2");
+  font-display: swap;
+}
+
+body {
+  font-family: "Island", Georgia, serif;
+}
+` },
+      hint: "`font-display` пишеться всередині `@font-face`, а не в `body`.",
+      difficulty: 1,
+    }),
+    L(9, {
+      id: 42,
+      title: "Легкий CSS: база + модифікатори",
+      concept: "Три кнопки, у кожної свій клас, і в кожному — ті самі 6 рядків відступів, рамок і шрифтів. Такий CSS важчий і крихкий: змінив відступ в одній — забув у двох інших. Рішення: базовий клас `.btn` зі спільним, а модифікатори (`.btn--primary`) — лише з відмінностями.",
+      example: `.btn { padding: 10px 16px; border-radius: 6px; }
+.btn--primary { background: #2a85c4; }
+<button class="btn btn--primary">`,
+      missionStory: "Кнопки вітряків описано тричі майже однаково. Мельник платить за кожен зайвий байт борошном.",
+      worldEvent: "CSS вітряків схуд утричі.",
+      taskType: "fix-markup",
+      prompt: "Винеси спільне в `.btn` (padding, border, border-radius, font, cursor), а відмінності — у `.btn--primary`, `.btn--danger`, `.btn--ghost`. Кнопкам дай класи `btn btn--…`. `padding` і `border-radius` мають бути записані в CSS лише один раз. Вигляд не змінюється.",
+      starterHtml: `<button class="btn-primary" type="button">Запустити</button>
+<button class="btn-danger" type="button">Зупинити</button>
+<button class="btn-ghost" type="button">Деталі</button>
+`,
+      starterCss: `.btn-primary {
+  padding: 10px 16px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+  background: #2a85c4;
+  color: #ffffff;
+}
+
+.btn-danger {
+  padding: 10px 16px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+  background: #c4472a;
+  color: #ffffff;
+}
+
+.btn-ghost {
+  padding: 10px 16px;
+  border: 2px solid #1b1612;
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
+  color: #1b1612;
+}
+`,
+      testCases: [
+        { name: "Кнопки мають базовий клас і модифікатор", check: (ctx) => eq(ctx, ctx.$$("button").map((b) => b.className.trim()).join(" | "), "btn btn--primary | btn btn--danger | btn btn--ghost") },
+        { name: "Вигляд не змінився", check: (ctx) => { const b = ctx.$$("button"); const v = b.map((e) => [ctx.style(e, "padding-top"), ctx.style(e, "padding-left"), ctx.style(e, "border-top-left-radius"), ctx.style(e, "background-color"), ctx.style(e, "border-top-color")].join(" ")); return eq(ctx, v.join(" | "), ["10px 16px 6px rgb(42, 133, 196) rgba(0, 0, 0, 0)", "10px 16px 6px rgb(196, 71, 42) rgba(0, 0, 0, 0)", "10px 16px 6px rgba(0, 0, 0, 0) rgb(27, 22, 18)"].join(" | ")); } },
+        { name: "padding і border-radius записано один раз", check: (ctx) => { const css = ctx.css.replace(/\/\*[\s\S]*?\*\//g, ""); const n = (re) => (css.match(re) || []).length; return eq(ctx, "padding: " + n(/padding\s*:/g) + ", border-radius: " + n(/border-radius\s*:/g), "padding: 1, border-radius: 1"); } },
+      ],
+      solution: { html: `<button class="btn btn--primary" type="button">Запустити</button>
+<button class="btn btn--danger" type="button">Зупинити</button>
+<button class="btn btn--ghost" type="button">Деталі</button>
+`, css: `.btn {
+  padding: 10px 16px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn--primary {
+  background: #2a85c4;
+  color: #ffffff;
+}
+
+.btn--danger {
+  background: #c4472a;
+  color: #ffffff;
+}
+
+.btn--ghost {
+  border-color: #1b1612;
+  background: transparent;
+  color: #1b1612;
+}
+` },
+      hint: "У `.btn--ghost` досить змінити лише `border-color` — решту рамки дасть `.btn`.",
+      difficulty: 2,
+    }),
+    L(9, {
+      id: 43,
+      title: "Reflow: анімуй transform",
+      concept: "Зміна `left`, `top`, `width`, `margin` змушує браузер перераховувати розкладку (reflow) і перемальовувати сторінку в кожному кадрі — анімація смикається. `transform` і `opacity` обробляє відеокарта на етапі композиції, без reflow — це плавні 60 кадрів на секунду.",
+      example: `/* повільно */ @keyframes move { to { left: 200px; } }
+/* швидко  */ @keyframes move { to { transform: translateX(200px); } }`,
+      missionStory: "Лопаті вітряка рухаються ривками, а процесор мельника гріється. Звична причина — анімація властивості, що перебудовує сторінку.",
+      worldEvent: "Вітряки розкрутились — острів вантажиться миттєво!",
+      taskType: "fix-markup",
+      prompt: "Перепиши `@keyframes slide` так, щоб замість `left` рухав `transform: translateX(…)` (від `0` до `200px`). Жодних `left`/`top`/`margin`/`width` у кадрах.",
+      starterHtml: `<div class="mill">
+  <div class="blade"></div>
+</div>
+`,
+      starterCss: `.mill {
+  height: 80px;
+  background: #cfe8f7;
+}
+
+.blade {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  background: #a06a36;
+  animation: slide 2s ease-in-out infinite alternate;
+}
+
+@keyframes slide {
+  from { left: 0; }
+  to { left: 200px; }
+}
+`,
+      testCases: [
+        { name: "Кінцевий кадр — translateX(200px)", check: (ctx) => { const k = ctx.keyframes("slide"); const end = k && (k.findRule("100%") || k.findRule("to")); return eq(ctx, end ? end.style.transform : null, "translateX(200px)"); } },
+        { name: "У кадрах немає властивостей розкладки", check: (ctx) => { const k = ctx.keyframes("slide"); const bad = k ? Array.from(k.cssRules).flatMap((r) => ["left", "top", "right", "bottom", "margin-left", "width"].filter((p) => r.style.getPropertyValue(p))) : ["немає keyframes"]; return { pass: !bad.length, actual: bad.join(", ") || "лише transform", expected: "лише transform" }; } },
+      ],
+      solution: { html: `<div class="mill">
+  <div class="blade"></div>
+</div>
+`, css: `.mill {
+  height: 80px;
+  background: #cfe8f7;
+}
+
+.blade {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  background: #a06a36;
+  animation: slide 2s ease-in-out infinite alternate;
+}
+
+@keyframes slide {
+  from { transform: translateX(0); }
+  to { transform: translateX(200px); }
+}
+` },
+      hint: "Заміни `left: 0` на `transform: translateX(0)` і так само для `to`.",
+      difficulty: 2,
+    }),
+
+    /* ───────────── 10. Бібліотека порядку — організація коду ───────────── */
+    L(10, {
+      id: 44,
+      title: "Основи BEM",
+      concept: "BEM — угода про назви класів: Блок (`book-card`) — самостійний компонент, Елемент (`book-card__title`) — його частина через два підкреслення. Кожен селектор — один клас, без вкладення (`.card .title`): специфічність однакова й низька, стилі не «протікають» в інші компоненти, а з HTML одразу видно, до чого належить елемент.",
+      example: `.search-form { … }
+.search-form__input { … }
+.search-form__button { … }`,
+      missionStory: "У бібліотеці всі полиці підписано «полиця», а книжки — «книжка». Бібліотекар не знаходить нічого.",
+      worldEvent: "Полиці бібліотеки отримали точні підписи.",
+      taskType: "fix-markup",
+      prompt: "Перейменуй класи за BEM: блок `book-card`, елементи `book-card__title`, `book-card__text`, `book-card__button`. У CSS кожен селектор — один клас, без вкладених `.card .title`. Вигляд не змінюється.",
+      starterHtml: `<article class="card">
+  <h3 class="title">Кобзар</h3>
+  <p class="text">Т. Шевченко, 1840</p>
+  <a class="button" href="#take">Взяти</a>
+</article>
+`,
+      starterCss: `.card {
+  padding: 16px;
+  border: 1px solid #c9a86a;
+  background: #f3eee2;
+}
+
+.card .title {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.card .text {
+  color: #5e5a52;
+}
+
+.card .button {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #1b1612;
+  color: #ffffff;
+}
+`,
+      testCases: [
+        { name: "BEM-класи на своїх місцях", check: (ctx) => { const need = ["article.book-card", "h3.book-card__title", "p.book-card__text", "a.book-card__button"]; const miss = need.filter((s) => !ctx.$(s)); return { pass: !miss.length, actual: miss.length ? "немає: " + miss.join(", ") : "усі є", expected: "усі є" }; } },
+        { name: "Вигляд збережено", check: (ctx) => eq(ctx, [ctx.style(".book-card", "padding-top"), ctx.style(".book-card__title", "font-size"), ctx.style(".book-card__text", "color"), ctx.style(".book-card__button", "background-color")].join(" "), "16px 20px rgb(94, 90, 82) rgb(27, 22, 18)") },
+        { name: "Кожен селектор — один клас", check: (ctx) => { const bad = ctx.rules(/./).map((r) => r.rule.selectorText).filter((s) => !/^\.[\w-]+$/.test(s)); return { pass: !bad.length, actual: bad.join(", ") || "усі прості", expected: "усі прості" }; } },
+      ],
+      solution: { html: `<article class="book-card">
+  <h3 class="book-card__title">Кобзар</h3>
+  <p class="book-card__text">Т. Шевченко, 1840</p>
+  <a class="book-card__button" href="#take">Взяти</a>
+</article>
+`, css: `.book-card {
+  padding: 16px;
+  border: 1px solid #c9a86a;
+  background: #f3eee2;
+}
+
+.book-card__title {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.book-card__text {
+  color: #5e5a52;
+}
+
+.book-card__button {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #1b1612;
+  color: #ffffff;
+}
+` },
+      hint: "`.card .title` стає просто `.book-card__title`.",
+      difficulty: 2,
+    }),
+    L(10, {
+      id: 45,
+      title: "Модифікатори BEM",
+      concept: "Модифікатор описує варіант блоку чи елемента: `book-card--featured`, `book-card__button--disabled` (через два дефіси). Модифікатор завжди йде разом із базовим класом — `class=\"book-card book-card--featured\"` — і містить лише відмінності, а все спільне бере з бази.",
+      example: `<article class="book-card book-card--featured">
+.book-card--featured { border-color: gold; }`,
+      missionStory: "Бібліотека хоче виділити книгу місяця, а видану книгу позначити недоступною — без копіювання стилів.",
+      worldEvent: "Книга місяця сяє на почесній полиці.",
+      taskType: "write-markup",
+      prompt: "Друга картка — «книга місяця»: модифікатор `book-card--featured` (рамка `gold`, `2px`). У третій картці кнопка неактивна: `book-card__button--disabled` (`opacity: 0.5`). Модифікатори додавай поруч із базовими класами.",
+      starterHtml: `<article class="book-card">
+  <h3 class="book-card__title">Кобзар</h3>
+  <a class="book-card__button" href="#take">Взяти</a>
+</article>
+<article class="book-card">
+  <h3 class="book-card__title">Лісова пісня</h3>
+  <a class="book-card__button" href="#take">Взяти</a>
+</article>
+<article class="book-card">
+  <h3 class="book-card__title">Тигролови</h3>
+  <a class="book-card__button" href="#take">Видана</a>
+</article>
+`,
+      starterCss: `.book-card {
+  margin-bottom: 12px;
+  padding: 16px;
+  border: 1px solid #c9a86a;
+  background: #f3eee2;
+}
+
+.book-card__title {
+  margin: 0 0 8px;
+}
+
+.book-card__button {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #1b1612;
+  color: #ffffff;
+}
+`,
+      testCases: [
+        { name: "Друга картка — book-card book-card--featured", check: (ctx) => { const c = ctx.$$("article")[1]; return eq(ctx, c.classList.contains("book-card") && c.classList.contains("book-card--featured"), true); } },
+        { name: "Книга місяця з рамкою gold 2px, інші — ні", check: (ctx) => { const a = ctx.$$("article"); return eq(ctx, a.map((c) => ctx.style(c, "border-top-color") === ctx.color("gold") && ctx.style(c, "border-top-width") === "2px").join(" "), "false true false"); } },
+        { name: "Неактивна кнопка: обидва класи й opacity 0.5", check: (ctx) => { const b = ctx.$$(".book-card__button")[2]; return eq(ctx, b.classList.contains("book-card__button--disabled") + " " + ctx.style(b, "opacity") + " " + ctx.style(b, "padding-top"), "true 0.5 6px"); } },
+        { name: "Інші кнопки не зачеплено", check: (ctx) => eq(ctx, ctx.$$(".book-card__button").slice(0, 2).map((b) => ctx.style(b, "opacity")).join(" "), "1 1") },
+      ],
+      solution: { html: `<article class="book-card">
+  <h3 class="book-card__title">Кобзар</h3>
+  <a class="book-card__button" href="#take">Взяти</a>
+</article>
+<article class="book-card book-card--featured">
+  <h3 class="book-card__title">Лісова пісня</h3>
+  <a class="book-card__button" href="#take">Взяти</a>
+</article>
+<article class="book-card">
+  <h3 class="book-card__title">Тигролови</h3>
+  <a class="book-card__button book-card__button--disabled" href="#take">Видана</a>
+</article>
+`, css: `.book-card {
+  margin-bottom: 12px;
+  padding: 16px;
+  border: 1px solid #c9a86a;
+  background: #f3eee2;
+}
+
+.book-card--featured {
+  border: 2px solid gold;
+}
+
+.book-card__title {
+  margin: 0 0 8px;
+}
+
+.book-card__button {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #1b1612;
+  color: #ffffff;
+}
+
+.book-card__button--disabled {
+  opacity: 0.5;
+}
+` },
+      hint: "Модифікатор у CSS — окремий однокласовий селектор, записаний після базового.",
+      difficulty: 2,
+    }),
+    L(10, {
+      id: 46,
+      title: "Структура CSS-файлів",
+      concept: "Великий проєкт ділять на файли від загального до конкретного: змінні й скидання стилів → базові стилі тегів (типографіка) → розкладка (layout) → компоненти → утиліти. Кожен наступний шар специфічніший і може перекрити попередній, а утиліти (`.hidden`, `.text-center`) стоять останніми, бо мають спрацьовувати завжди.",
+      example: `/* main.css */
+@import "variables.css";
+@import "base.css";
+@import "layout.css";
+@import "components/card.css";
+@import "utilities.css";`,
+      exampleLang: "css",
+      missionStory: "Бібліотекар розкладає сувої з правилами по полицях. У якому порядку їх читати, щоб нічого не суперечило?",
+      worldEvent: "Бібліотеку впорядковано — кожен клас на своїй полиці!",
+      taskType: "multiple-choice",
+      prompt: "Який порядок підключення CSS найкращий?",
+      options: [
+        "Змінні й reset → base (теги, типографіка) → layout → компоненти → утиліти",
+        "Утиліти → компоненти → layout → base → змінні",
+        "Компоненти → змінні → утиліти → base → layout",
+        "Порядок не має значення — каскад усе вирішить сам",
+      ],
+      expectedAnswer: "Змінні й reset → base (теги, типографіка) → layout → компоненти → утиліти",
+      hint: "Від загального до конкретного: те, що має перемагати, підключається пізніше.",
+      difficulty: 1,
+    }),
+
+    /* ───────────── 11. Обсерваторія нового CSS — сучасний CSS ───────────── */
+    L(11, {
+      id: 47,
+      title: "Селектор :has()",
+      concept: "`:has()` — «батьківський селектор»: стилізує елемент залежно від того, що всередині. `.card:has(.badge)` — картки з бейджем, `.field:has(input:checked)` — поле з увімкненим прапорцем. Працює динамічно: змінився стан — змінився стиль, без жодного JS.",
+      example: `.card:has(img) { padding-top: 0; }
+form:has(input:invalid) .submit { opacity: 0.5; }`,
+      missionStory: "Обсерваторія хоче підсвічувати картки небесних тіл із позначкою «Нова» і нагадування, які ввімкнено.",
+      worldEvent: "Нові комети в каталозі обсерваторії світяться.",
+      taskType: "write-markup",
+      prompt: "Картки, що містять `.badge`, отримують рамку `gold` (`.card:has(.badge)`). Мітки `.field`, у яких чекбокс увімкнено, — фон `#e8f5e9`.",
+      starterHtml: `<article class="card">
+  <span class="badge">Нова</span>
+  <h3>Комета Галлея</h3>
+</article>
+<article class="card">
+  <h3>Туманність Андромеди</h3>
+</article>
+<label class="field"><input type="checkbox" checked> Нагадати про затемнення</label>
+<label class="field"><input type="checkbox"> Нагадати про метеори</label>
+`,
+      starterCss: `.card {
+  margin-bottom: 8px;
+  padding: 12px;
+  border: 2px solid #9aa1a9;
+}
+
+.field {
+  display: block;
+  padding: 8px;
+}
+`,
+      testCases: [
+        { name: "Рамка gold лише в картки з бейджем", check: (ctx) => eq(ctx, ctx.$$(".card").map((c) => ctx.style(c, "border-top-color") === ctx.color("gold")).join(" "), "true false") },
+        { name: "Увімкнене поле підсвічено", check: (ctx) => eq(ctx, ctx.$$(".field").map((f) => ctx.style(f, "background-color") === ctx.color("#e8f5e9")).join(" "), "true false") },
+        { name: "Працює динамічно: увімкни другий прапорець", check: (ctx) => { ctx.$$(".field input")[1].checked = true; return eq(ctx, ctx.style(ctx.$$(".field")[1], "background-color"), ctx.color("#e8f5e9")); } },
+      ],
+      codeChecks: [{ re: /:has\(/, label: "Використано :has()", in: "css" }],
+      solution: { html: `<article class="card">
+  <span class="badge">Нова</span>
+  <h3>Комета Галлея</h3>
+</article>
+<article class="card">
+  <h3>Туманність Андромеди</h3>
+</article>
+<label class="field"><input type="checkbox" checked> Нагадати про затемнення</label>
+<label class="field"><input type="checkbox"> Нагадати про метеори</label>
+`, css: `.card {
+  margin-bottom: 8px;
+  padding: 12px;
+  border: 2px solid #9aa1a9;
+}
+
+.card:has(.badge) {
+  border-color: gold;
+}
+
+.field {
+  display: block;
+  padding: 8px;
+}
+
+.field:has(input:checked) {
+  background: #e8f5e9;
+}
+` },
+      hint: "У дужках `:has()` пишеш селектор нащадка: `.field:has(input:checked)`.",
+      difficulty: 2,
+    }),
+    L(11, {
+      id: 48,
+      title: "aspect-ratio",
+      concept: "Раніше пропорційні блоки робили хаком `height: 0; padding-top: 56.25%` — відсоток рахується від ширини батька, тож при іншій ширині блоку пропорції ламаються. `aspect-ratio: 16 / 9` задає пропорцію самому блоку: досить ширини, висоту браузер порахує сам.",
+      example: `.video { width: 100%; aspect-ratio: 16 / 9; }
+.avatar { width: 64px; aspect-ratio: 1; object-fit: cover; }`,
+      missionStory: "Екран телескопа замість 16:9 виходить квадратним, а аватари астрономів — сплюснутими.",
+      worldEvent: "Екран телескопа показує небо в правильних пропорціях.",
+      taskType: "fix-markup",
+      prompt: "Прибери хак із `padding-top` у `.video` і задай `aspect-ratio: 16 / 9` (ширина 640px → висота 360px). Аватару `.avatar` прибери фіксовану висоту й задай `aspect-ratio: 1 / 1` (лишається `object-fit: cover`).",
+      starterHtml: `<div class="video">
+  <div class="video__screen">▶ Пряма трансляція неба</div>
+</div>
+<img class="avatar" src="ship.svg" alt="Астроном Олена">
+`,
+      starterCss: `.video {
+  position: relative;
+  width: 640px;
+  height: 0;
+  padding-top: 56.25%;
+  background: #0d1b2a;
+}
+
+.video__screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+}
+
+.avatar {
+  display: block;
+  width: 120px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+`,
+      testCases: [
+        { name: "Екран 640×360", check: (ctx) => { const r = ctx.rect(".video"); return eq(ctx, px(r.width) + "×" + px(r.height), "640px×360px"); } },
+        { name: "Аватар 120×120", check: (ctx) => { const r = ctx.rect(".avatar"); return eq(ctx, px(r.width) + "×" + px(r.height), "120px×120px"); } },
+        { name: "Пропорції через aspect-ratio", check: (ctx) => eq(ctx, ctx.style(".video", "aspect-ratio") + " | " + ctx.style(".avatar", "aspect-ratio"), "16 / 9 | 1 / 1") },
+      ],
+      codeChecks: [{ re: /padding-top\s*:\s*56\.25%/, not: true, label: "Хак з padding-top прибрано", in: "css" }],
+      solution: { html: `<div class="video">
+  <div class="video__screen">▶ Пряма трансляція неба</div>
+</div>
+<img class="avatar" src="ship.svg" alt="Астроном Олена">
+`, css: `.video {
+  position: relative;
+  width: 640px;
+  aspect-ratio: 16 / 9;
+  background: #0d1b2a;
+}
+
+.video__screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+}
+
+.avatar {
+  display: block;
+  width: 120px;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 50%;
+}
+` },
+      hint: "Видали `height: 0` і `padding-top` з `.video`, а в `.avatar` — `height: 90px`.",
+      difficulty: 1,
+    }),
+    L(11, {
+      id: 49,
+      title: "clamp(), min(), max()",
+      concept: "Математичні функції замість медіазапитів: `min(100% - 32px, 960px)` — «на всю ширину з полями, але не ширше за 960px»; `max(200px, 25%)` — «чверть, але не менше 200px»; `clamp(1.5rem, 4vw, 3rem)` — «росте з екраном у межах». Усередині можна рахувати без `calc()`.",
+      example: `.container { width: min(100% - 32px, 1100px); margin-inline: auto; }
+.sidebar { width: max(220px, 30%); }`,
+      missionStory: "Купол обсерваторії то занадто вузький, то розлазиться на весь екран. Нехай пристосовується сам — без жодного медіазапиту.",
+      worldEvent: "Купол обсерваторії підлаштовується під будь-яке небо.",
+      taskType: "write-markup",
+      prompt: "`.container`: ширина `min(100% - 32px, 960px)`, по центру (`margin-inline: auto`). `.title`: `font-size: clamp(1.5rem, 4vw, 3rem)`. `.sidebar`: ширина `max(200px, 25%)`. Медіазапити не потрібні.",
+      starterHtml: `<div class="container">
+  <h1 class="title">Обсерваторія</h1>
+  <aside class="sidebar">Карта неба</aside>
+</div>
+`,
+      starterCss: `.container {
+  background: #0d1b2a;
+  color: #ffffff;
+}
+
+.sidebar {
+  background: #1f4a5a;
+}
+`,
+      testCases: [
+        { name: "800px: контейнер 752px по центру, заголовок 32px, панель 200px", check: (ctx) => { const c = ctx.rect(".container"); return eq(ctx, [px(c.width), px(c.left), ctx.style(".title", "font-size"), px(ctx.rect(".sidebar").width)].join(" "), "752px 24px 32px 200px"); } },
+        { name: "1200px: контейнер 960px, заголовок 48px, панель 240px", width: 1200, check: (ctx) => eq(ctx, [px(ctx.rect(".container").width), ctx.style(".title", "font-size"), px(ctx.rect(".sidebar").width)].join(" "), "960px 48px 240px") },
+        { name: "400px: заголовок не менший за 24px", width: 400, check: (ctx) => eq(ctx, [px(ctx.rect(".container").width), ctx.style(".title", "font-size"), px(ctx.rect(".sidebar").width)].join(" "), "352px 24px 200px") },
+      ],
+      codeChecks: [{ re: /@media/, not: true, label: "Без медіазапитів", in: "css" }],
+      solution: { html: `<div class="container">
+  <h1 class="title">Обсерваторія</h1>
+  <aside class="sidebar">Карта неба</aside>
+</div>
+`, css: `.container {
+  width: min(100% - 32px, 960px);
+  margin-inline: auto;
+  background: #0d1b2a;
+  color: #ffffff;
+}
+
+.title {
+  font-size: clamp(1.5rem, 4vw, 3rem);
+}
+
+.sidebar {
+  width: max(200px, 25%);
+  background: #1f4a5a;
+}
+` },
+      hint: "`25%` у `.sidebar` рахується від ширини `.container`.",
+      difficulty: 2,
+    }),
+    L(11, {
+      id: 50,
+      title: "Нативний CSS nesting",
+      concept: "Тепер браузери вкладають правила самі, без Sass: усередині `.menu { … }` пишеш `& a { … }`, а `&:hover` чи `&.is-open` — для станів і класів того самого елемента. На відміну від Sass, склеювання назв (`&--dark`) нативно не працює — для BEM-модифікаторів пиши повний клас.",
+      example: `.card {
+  padding: 16px;
+
+  & h3 { margin: 0; }
+  &:hover { background: #f3eee2; }
+  &.is-active { border-color: gold; }
+}`,
+      missionStory: "Правила зоряного меню обсерваторії розкидано по файлу. Збери їх в одне сузір'я.",
+      worldEvent: "Обсерваторія відкрила нові зірки сучасного CSS!",
+      taskType: "fix-markup",
+      prompt: "Перепиши CSS так, щоб усе було всередині одного правила `.menu`: посилання — `& a`, наведення — `&:hover` усередині правила посилань, компактний варіант — `&.is-compact`. Вигляд не змінюється.",
       starterHtml: `<nav class="menu">
-  <a href="#1">Маяк</a>
-  <a href="#2">Розклад</a>
-  <a href="#3">Контакти</a>
+  <a href="#stars">Зорі</a>
+  <a href="#planets">Планети</a>
+</nav>
+<nav class="menu is-compact">
+  <a href="#comets">Комети</a>
+  <a href="#moons">Супутники</a>
 </nav>
 `,
       starterCss: `.menu {
   display: flex;
   gap: 16px;
+  padding: 12px;
+  background: #0d1b2a;
+}
+
+.menu a {
+  color: #cfe8f7;
+  text-decoration: none;
+}
+
+.menu a:hover {
+  color: #ffe061;
+}
+
+.menu.is-compact {
+  gap: 8px;
 }
 `,
       testCases: [
-        { name: "На 800px меню рядком", check: (ctx) => eq(ctx, ctx.style(".menu", "flex-direction"), "row") },
-        { name: "На 500px меню стовпчиком", width: 500, check: (ctx) => { const a = ctx.$$(".menu a").map((e) => ctx.rect(e)); return { pass: ctx.style(".menu", "flex-direction") === "column" && a[1].top > a[0].top, actual: ctx.style(".menu", "flex-direction"), expected: "column" }; } },
+        { name: "Вигляд збережено", check: (ctx) => eq(ctx, [ctx.style(".menu a", "color"), ctx.style(".menu a", "text-decoration-line"), ctx.style(".menu", "column-gap"), ctx.style(".is-compact", "column-gap")].join(" "), "rgb(207, 232, 247) none 16px 8px") },
+        { name: "Одне зовнішнє правило .menu", check: (ctx) => eq(ctx, ctx.rules(/./).map((r) => r.rule.selectorText).join(", "), ".menu") },
+        { name: "Наведення вкладено в правило посилань", check: (ctx) => { const top = ctx.rules(/^\.menu$/)[0]; const links = top && Array.from(top.rule.cssRules || []).find((r) => /&\s*a$|^a$/.test(r.selectorText || "")); const hover = links && Array.from(links.cssRules || []).find((r) => /:hover/.test(r.selectorText || "")); return { pass: !!hover && ctx.color(hover.style.getPropertyValue("color")) === ctx.color("#ffe061"), actual: links ? (hover ? hover.selectorText : "немає &:hover у & a") : "немає вкладеного & a", expected: "&:hover усередині & a" }; } },
       ],
-      codeChecks: [{ re: /@media\s*\(\s*max-width\s*:\s*600px\s*\)/, label: "Є @media (max-width: 600px)", in: "css" }],
-      solution: {
-        html: `<nav class="menu">
-  <a href="#1">Маяк</a>
-  <a href="#2">Розклад</a>
-  <a href="#3">Контакти</a>
+      codeChecks: [{ re: /&/, label: "Використано &", in: "css" }],
+      solution: { html: `<nav class="menu">
+  <a href="#stars">Зорі</a>
+  <a href="#planets">Планети</a>
 </nav>
-`,
-        css: `.menu {
+<nav class="menu is-compact">
+  <a href="#comets">Комети</a>
+  <a href="#moons">Супутники</a>
+</nav>
+`, css: `.menu {
   display: flex;
   gap: 16px;
-}
+  padding: 12px;
+  background: #0d1b2a;
 
-@media (max-width: 600px) {
-  .menu {
-    flex-direction: column;
+  & a {
+    color: #cfe8f7;
+    text-decoration: none;
+
+    &:hover {
+      color: #ffe061;
+    }
+  }
+
+  &.is-compact {
+    gap: 8px;
   }
 }
-`,
-      },
-      hint: "Усередині `@media (max-width: 600px) { … }` пишеш звичайне правило `.menu { flex-direction: column; }`.",
+` },
+      hint: "Вкладені правила йдуть після звичайних властивостей батька. `&.is-compact` — без пробілу, бо це той самий елемент.",
       difficulty: 2,
     }),
-    Object.assign({}, A8, {
-      id: 57,
-      title: "Адаптивні зображення",
-      concept: "Велика картинка на вузькому екрані вилазить за межі. Правило `img { max-width: 100%; height: auto; }` дозволяє їй стискатися до ширини батька, зберігаючи пропорції, але не розтягує маленькі картинки.",
-      example: `img {
-  max-width: 100%;
-  height: auto;
+
+    /* ───────────── 12. Гранд-готель «Люм'єр» — практичні проєкти ───────────── */
+    L(12, {
+      id: 51,
+      title: "Лендінг «Люм'єр» з нуля",
+      concept: "Час зібрати все разом: семантичний каркас, флекс-шапка, mobile-first сітка карток, змінні кольорів. Справжній лендінг починають зі структури HTML, потім додають базові стилі для телефона, а ширші екрани — медіазапитом.",
+      example: `:root { --gold: #c99812; }
+.rooms { display: grid; gap: 16px; }
+@media (min-width: 768px) {
+  .rooms { grid-template-columns: repeat(3, 1fr); }
 }`,
-      missionStory: "Панорама маяка шириною 800 пікселів не влазить у вузькі вікна й ламає всю сторінку.",
-      worldEvent: "Панорама маяка вміщається в будь-яке вікно.",
+      missionStory: "Гранд-готель «Люм'єр» відчиняється на найвищому пагорбі острова. Власниця замовила лендінг — і чекає його до відкриття.",
+      worldEvent: "Лендінг «Люм'єр» запрошує перших гостей.",
       taskType: "write-markup",
-      prompt: "Зроби так, щоб зображення ніколи не було ширшим за свого батька `.frame` і зберігало пропорції.",
-      starterHtml: `<div class="frame">
-  <img src="panorama.svg" width="800" height="400" alt="Панорама маяка на світанку">
-</div>
+      prompt: "Зверстай лендінг:\n- `header` (flex) з логотипом і `nav`;\n- `main` → секція `.hero` з одним `h1` і посиланням `.cta` на `#booking`;\n- секція `#rooms` з `h2` і трьома картками `.room` (у кожній `img` з `alt`, `h3` і ціна) — на телефоні в колонку, від `768px` — три в ряд (mobile-first);\n- `footer`;\n- кольори — змінні в `:root` (щонайменше `--gold`), використані через `var()`.",
+      starterHtml: `<!-- лендінг Гранд-готелю «Люм'єр» -->
 `,
-      starterCss: `.frame {
-  width: 300px;
-  border: 2px solid #1b1612;
-}
+      starterCss: `/* стилі лендінгу */
 `,
       testCases: [
-        { name: "Зображення не ширше за рамку (300px)", check: (ctx) => ({ pass: ctx.rect("img").width <= 300.5, actual: px(ctx.rect("img").width), expected: "≤ 300px" }) },
-        { name: "Пропорції 2:1 збережено", check: (ctx) => { const r = ctx.rect("img"); return { pass: near(r.width / r.height, 2, 0.05), actual: px(r.width) + " × " + px(r.height), expected: "300px × 150px" }; } },
+        { name: "Каркас: header з nav, main, footer", check: (ctx) => { const miss = ["header nav", "main", "footer"].filter((s) => !ctx.$(s)); return { pass: !miss.length && ctx.style("header", "display") === "flex", actual: miss.length ? "немає: " + miss.join(", ") : "header " + ctx.style("header", "display"), expected: "header flex" }; } },
+        { name: "Hero: один h1 і кнопка на #booking", check: (ctx) => ({ pass: ctx.$$("h1").length === 1 && !!ctx.$(".hero h1") && !!ctx.$('.hero a.cta[href="#booking"]'), actual: "h1: " + ctx.$$("h1").length + ", cta: " + (ctx.$(".hero .cta") ? ctx.attr(".hero .cta", "href") : "немає"), expected: "h1: 1, cta: #booking" }) },
+        { name: "Три номери з фото (alt) і заголовком", check: (ctx) => { const r = ctx.$$("#rooms .room"); return { pass: r.length === 3 && r.every((x) => x.querySelector("img[alt]:not([alt=''])") && x.querySelector("h3")), actual: r.length + " карток", expected: "3 повні картки" }; } },
+        { name: "400px — у колонку", width: 400, check: (ctx) => eq(ctx, perRow(ctx, ".room"), 1) },
+        { name: "900px — три в ряд", width: 900, check: (ctx) => eq(ctx, perRow(ctx, ".room"), 3) },
+        { name: "Змінна --gold оголошена й використана", check: (ctx) => ({ pass: !!ctx.win.getComputedStyle(ctx.doc.documentElement).getPropertyValue("--gold").trim() && /var\(--gold\)/.test(ctx.css), actual: ctx.win.getComputedStyle(ctx.doc.documentElement).getPropertyValue("--gold").trim() || "немає", expected: "колір у --gold і var(--gold)" }) },
       ],
-      solution: {
-        html: `<div class="frame">
-  <img src="panorama.svg" width="800" height="400" alt="Панорама маяка на світанку">
-</div>
-`,
-        css: `.frame {
-  width: 300px;
-  border: 2px solid #1b1612;
-}
-
-img {
-  max-width: 100%;
-  height: auto;
-}
-`,
-      },
-      hint: "Нове правило `img` з двома властивостями: `max-width` і `height`.",
-      difficulty: 1,
-    }),
-    Object.assign({}, A8, {
-      id: 58,
-      title: "position: relative і absolute",
-      concept: "`position: absolute` виймає елемент із потоку й ставить його за `top`/`right`/`bottom`/`left` відносно найближчого предка з `position: relative` (або іншим, крім `static`). Так роблять бейджі, кнопки закриття, підписи поверх картинок.",
-      example: `.card { position: relative; }
-.badge {
-  position: absolute;
-  top: 0;
-  right: 0;
-}`,
-      missionStory: "Вогонь маяка має горіти у верхньому правому куті вежі, а не де завгодно на березі.",
-      worldEvent: "Вогонь маяка займає своє місце на вершині.",
-      taskType: "write-markup",
-      prompt: "Розмісти `.light` у верхньому правому куті `.tower`: зроби вежу точкою відліку (`position: relative`), а вогонь — абсолютно позиціонованим з `top: 0` і `right: 0`.",
-      starterHtml: `<div class="tower">
-  Вежа маяка
-  <span class="light">✦</span>
-</div>
-`,
-      starterCss: `.tower {
-  width: 160px;
-  height: 200px;
-  margin: 20px;
-  background: #9aa1a9;
-}
-
-.light {
-  width: 24px;
-  height: 24px;
-  background: #f7d23a;
-}
-`,
-      testCases: [
-        { name: "Вогонь у верхньому правому куті вежі", check: (ctx) => { const t = ctx.rect(".tower"), l = ctx.rect(".light"); return { pass: near(l.top, t.top) && near(l.right, t.right), actual: "зсув: top " + px(l.top - t.top) + ", right " + px(t.right - l.right), expected: "0px, 0px" }; } },
-        { name: "Вежа — position: relative, вогонь — absolute", check: (ctx) => eq(ctx, ctx.style(".tower", "position") + " " + ctx.style(".light", "position"), "relative absolute") },
-      ],
-      solution: {
-        html: `<div class="tower">
-  Вежа маяка
-  <span class="light">✦</span>
-</div>
-`,
-        css: `.tower {
-  position: relative;
-  width: 160px;
-  height: 200px;
-  margin: 20px;
-  background: #9aa1a9;
-}
-
-.light {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 24px;
-  height: 24px;
-  background: #f7d23a;
-}
-`,
-      },
-      hint: "Без `position: relative` на вежі вогонь рахуватиме координати від усієї сторінки.",
-      difficulty: 2,
-    }),
-    Object.assign({}, A8, {
-      id: 59,
-      title: "transition і :hover",
-      concept: "`transition` плавно анімує зміну властивостей: `transition: background-color 0.3s` — колір фону змінюватиметься за 0,3 секунди. Разом із `:hover` це дає приємні живі кнопки без жодного JavaScript.",
-      example: `.btn {
-  background: navy;
-  transition: background-color 0.3s;
-}
-.btn:hover {
-  background: royalblue;
-}`,
-      missionStory: "Кнопка «Запалити маяк» мертва — не реагує на наближення руки. Оживи її.",
-      worldEvent: "Кнопка маяка м'яко світиться під рукою.",
-      taskType: "write-markup",
-      prompt: "Додай `.btn` плавний перехід `transition: background-color 0.3s`, а при наведенні (`.btn:hover`) — фон `orange`.",
-      starterHtml: `<button class="btn" type="button">Запалити маяк</button>
-`,
-      starterCss: `.btn {
-  padding: 12px 20px;
-  border: 0;
-  background-color: #2a85c4;
-  color: white;
-}
-`,
-      testCases: [
-        { name: "Перехід background-color за 0.3s", check: (ctx) => eq(ctx, ctx.style(".btn", "transition-property") + " " + ctx.style(".btn", "transition-duration"), "background-color 0.3s") },
-        {
-          name: "При наведенні фон orange",
-          check(ctx) {
-            const rule = ctx.rules(/\.btn:hover/)[0];
-            const value = rule ? rule.rule.style.getPropertyValue("background-color") || rule.rule.style.getPropertyValue("background") : "";
-            return { pass: !!rule && ctx.color(value) === ctx.color("orange"), actual: rule ? ".btn:hover { " + (value || "без фону") + " }" : "правила .btn:hover немає", expected: ".btn:hover { background-color: orange }" };
-          },
-        },
-      ],
-      solution: {
-        html: `<button class="btn" type="button">Запалити маяк</button>
-`,
-        css: `.btn {
-  padding: 12px 20px;
-  border: 0;
-  background-color: #2a85c4;
-  color: white;
-  transition: background-color 0.3s;
-}
-
-.btn:hover {
-  background-color: orange;
-}
-`,
-      },
-      hint: "`transition` — у звичайному правилі `.btn`, а новий колір — в окремому правилі `.btn:hover`.",
-      difficulty: 2,
-    }),
-    Object.assign({}, A8, {
-      id: 60,
-      title: "Фінальний проєкт: вітрина острова",
-      concept: "Фінальна сторінка об'єднує все: семантичний каркас (`header`, `nav`, `main`, `footer`), флекс-меню, адаптивну сітку карток на Grid, медіазапит для телефонів і доступні зображення з `alt`.",
-      example: `.cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-@media (max-width: 600px) {
-  .cards { grid-template-columns: 1fr; }
-}`,
-      missionStory: "Острів відбудовано! Лишилась вітрина, яка покаже всім мореплавцям, що тут на них чекає, — на будь-якому екрані.",
-      worldEvent: "Маяк засяяв — острів видно з будь-якого екрана!",
-      taskType: "write-markup",
-      prompt: "Збудуй вітрину: `header` з `h1` і `nav`, у якому посилання стоять рядком (`display: flex`); `main` з `.cards` — сіткою з трьох однакових колонок, у якій три `article.card` з `img` (з `alt`) і `h2`; `footer`. На екранах до `600px` картки мають ставати в одну колонку.",
-      starterHtml: `<!-- вітрина острова будівельників -->
-`,
-      starterCss: `/* стилі вітрини */
-`,
-      testCases: [
-        { name: "Семантичний каркас: header, nav, main, footer", check: (ctx) => ({ pass: ["header", "nav", "main", "footer", "header h1"].every((s) => ctx.$(s)), actual: ["header", "nav", "main", "footer", "header h1"].filter((s) => !ctx.$(s)).join(", ") || "усе на місці", expected: "усе на місці" }) },
-        { name: "Меню рядком (flex)", check: (ctx) => { const a = ctx.$$("nav a"); return { pass: a.length >= 2 && ctx.style(ctx.$("nav ul") || ctx.$("nav"), "display") === "flex" && near(ctx.rect(a[0]).top, ctx.rect(a[1]).top), actual: a.length + " посилань, display " + ctx.style(ctx.$("nav ul") || ctx.$("nav"), "display"), expected: "щонайменше 2 посилання, flex" }; } },
-        { name: "Три картки з картинками й заголовками", check: (ctx) => { const c = ctx.$$(".cards > article.card"); return { pass: c.length === 3 && c.every((card) => card.querySelector("img") && card.querySelector("h2") && (card.querySelector("img").getAttribute("alt") || "").trim()), actual: c.length + " карток", expected: "3 картки з img (alt) і h2" }; } },
-        { name: "На 800px — три колонки", check: (ctx) => { const c = ctx.$$(".card").map((e) => ctx.rect(e)); return { pass: c.length === 3 && near(c[0].top, c[2].top) && near(c[0].width, c[1].width), actual: c.length === 3 && near(c[0].top, c[2].top) ? "в один ряд" : "не в ряд", expected: "три рівні колонки" }; } },
-        { name: "На 500px — одна колонка", width: 500, check: (ctx) => { const c = ctx.$$(".card").map((e) => ctx.rect(e)); return { pass: c.length === 3 && c[1].top > c[0].bottom - 1 && near(c[0].left, c[1].left), actual: c.length === 3 && c[1].top > c[0].bottom - 1 ? "стовпчиком" : "не стовпчиком", expected: "картки одна під одною" }; } },
-      ],
-      codeChecks: [
-        { re: /display\s*:\s*grid/, label: "Картки на CSS Grid", in: "css" },
-        { re: /@media\s*\(\s*max-width\s*:\s*600px\s*\)/, label: "Є медіазапит до 600px", in: "css" },
-        { re: /max-width\s*:\s*100%/, label: "Адаптивні картинки (max-width: 100%)", in: "css" },
-      ],
-      solution: {
-        html: `<header>
-  <h1>Острів будівельників</h1>
+      codeChecks: [{ re: /@media\s*\(\s*min-width/, label: "Mobile-first: @media (min-width)", in: "css" }],
+      solution: { html: `<header class="site-header">
+  <a class="logo" href="#">Люм'єр</a>
   <nav>
-    <ul>
-      <li><a href="#harbor">Причал</a></li>
-      <li><a href="#market">Ринок</a></li>
-      <li><a href="#lighthouse">Маяк</a></li>
-    </ul>
+    <a href="#rooms">Номери</a>
+    <a href="#booking">Бронювання</a>
   </nav>
 </header>
-
 <main>
-  <div class="cards">
-    <article class="card">
-      <img src="harbor.svg" width="400" height="250" alt="Причал із кораблями">
-      <h2>Причал</h2>
-    </article>
-    <article class="card">
-      <img src="market.svg" width="400" height="250" alt="Ринок із яскравими наметами">
-      <h2>Ринок</h2>
-    </article>
-    <article class="card">
-      <img src="lighthouse.svg" width="400" height="250" alt="Маяк на скелі">
-      <h2>Маяк</h2>
-    </article>
-  </div>
+  <section class="hero">
+    <h1>Гранд-готель «Люм'єр»</h1>
+    <p>Світанок над морем — просто з вашого балкона.</p>
+    <a class="cta" href="#booking">Забронювати</a>
+  </section>
+  <section id="rooms">
+    <h2>Номери</h2>
+    <div class="rooms">
+      <article class="room">
+        <img src="harbor.svg" alt="Номер з видом на причал">
+        <h3>Стандарт</h3>
+        <p>від 2400 ₴</p>
+      </article>
+      <article class="room">
+        <img src="lighthouse.svg" alt="Люкс з видом на маяк">
+        <h3>Люкс</h3>
+        <p>від 4200 ₴</p>
+      </article>
+      <article class="room">
+        <img src="panorama.svg" alt="Пентхаус з панорамою острова">
+        <h3>Пентхаус</h3>
+        <p>від 9000 ₴</p>
+      </article>
+    </div>
+  </section>
 </main>
-
 <footer>
-  <p>© 2026 Острів будівельників</p>
+  <p>© 2026 Гранд-готель «Люм'єр»</p>
 </footer>
-`,
-        css: `nav ul {
+`, css: `:root {
+  --gold: #c99812;
+  --ink: #1b1612;
+  --paper: #fbf7ef;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+}
+
+header nav {
   display: flex;
   gap: 16px;
-  list-style: none;
-  padding: 0;
 }
 
-.cards {
+.hero {
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.cta {
+  display: inline-block;
+  padding: 12px 20px;
+  background: var(--gold);
+  color: var(--ink);
+}
+
+#rooms {
+  padding: 16px;
+}
+
+.rooms {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
 
-.card img {
-  max-width: 100%;
+.room img {
+  display: block;
+  width: 100%;
   height: auto;
 }
 
-@media (max-width: 600px) {
-  .cards {
-    grid-template-columns: 1fr;
+@media (min-width: 768px) {
+  .rooms {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
+
+footer {
+  padding: 16px;
+  text-align: center;
+}
+` },
+      hint: "Почни з HTML-каркаса, потім стилі для телефона, а в кінці — один медіазапит на `768px`.",
+      difficulty: 3,
+    }),
+    L(12, {
+      id: 52,
+      title: "Форма бронювання «Люм'єр»",
+      concept: "Форма бронювання поєднує все про форми: правильні типи полів, мітки, валідацію, `select` з порожньою підказкою (`value=\"\"` + `required` — не дасть надіслати без вибору), `fieldset` з `legend` для групи прапорців і розкладку на Grid.",
+      example: `<select id="room" required>
+  <option value="">Оберіть номер</option>
+  <option value="lux">Люкс</option>
+</select>
+<fieldset>
+  <legend>Послуги</legend>
+  <input type="checkbox" id="spa"> <label for="spa">Спа</label>
+</fieldset>`,
+      missionStory: "Лендінг готовий, але гості не можуть забронювати номер. Власниця «Люм'єр» просить форму, яка не пропустить жодної помилки.",
+      worldEvent: "Перші бронювання «Люм'єр» уже надходять.",
+      taskType: "write-markup",
+      prompt: "У `#booking` створи форму з мітками для кожного поля:\n- `#guest-name` — обов'язкове, `minlength=\"2\"`;\n- `#guest-email` — email, обов'язкове;\n- `#checkin` — дата, обов'язкова;\n- `#nights` — число від 1 до 14;\n- `#room` — обов'язковий `select`: перша опція — підказка з `value=\"\"`, далі «Стандарт», «Люкс», «Пентхаус»;\n- `fieldset` з `legend` «Додаткові послуги» і чекбоксами `#breakfast`, `#spa`;\n- кнопка `type=\"submit\"`.\nПоля загорни в `.form-grid`: одна колонка, а від `600px` — дві.",
+      starterHtml: `<section id="booking">
+  <h2>Бронювання</h2>
+  <!-- форма -->
+</section>
 `,
-      },
-      hint: "Збери з готових цеглинок: flex для `nav ul`, `grid-template-columns: repeat(3, 1fr)` для `.cards` і медіазапит, що змінює його на `1fr`.",
+      starterCss: `/* стилі форми */
+`,
+      testCases: [
+        { name: "Типи полів", check: (ctx) => eq(ctx, ["#guest-name", "#guest-email", "#checkin", "#nights", "#room", "#breakfast", "#spa"].map((s) => (ctx.$(s) ? ctx.$(s).type : "—")).join(" "), "text email date number select-one checkbox checkbox") },
+        { name: "#nights від 1 до 14, ім'я minlength 2", check: (ctx) => eq(ctx, ctx.$("#nights") && ctx.$("#guest-name") ? ctx.attr("#nights", "min") + "–" + ctx.attr("#nights", "max") + ", " + ctx.$("#guest-name").minLength : null, "1–14, 2") },
+        { name: "Кожне поле має мітку", check: (ctx) => { const miss = ["#guest-name", "#guest-email", "#checkin", "#nights", "#room", "#breakfast", "#spa"].filter((s) => !labelOf(ctx, s)); return { pass: !miss.length, actual: miss.join(", ") || "усі з мітками", expected: "усі з мітками" }; } },
+        { name: "Порожня форма не проходить, заповнена — проходить", check: (ctx) => { const f = ctx.$("form"); if (!f) return { pass: false, actual: "form немає", expected: "form" }; const empty = f.checkValidity(); const set = (s, v) => { if (ctx.$(s)) ctx.$(s).value = v; }; set("#guest-name", "Олена"); set("#guest-email", "olena@example.com"); set("#checkin", "2026-12-01"); set("#nights", "3"); const room = ctx.$("#room"); room.selectedIndex = 0; const noRoom = f.checkValidity(); room.selectedIndex = 2; const full = f.checkValidity(); return { pass: !empty && !noRoom && full, actual: "порожня: " + empty + ", без номера: " + noRoom + ", повна: " + full, expected: "порожня: false, без номера: false, повна: true" }; } },
+        { name: "fieldset з legend «Додаткові послуги»", check: (ctx) => eq(ctx, ctx.$("fieldset legend") ? ctx.text("fieldset legend") : null, "Додаткові послуги") },
+        { name: "Кнопка надсилання", check: (ctx) => eq(ctx, !!ctx.$('form button[type="submit"], form input[type="submit"]'), true) },
+        { name: "800px — дві колонки", check: (ctx) => eq(ctx, ctx.$(".form-grid") ? ctx.style(".form-grid", "grid-template-columns").split(" ").length : 0, 2) },
+        { name: "400px — одна колонка", width: 400, check: (ctx) => eq(ctx, ctx.$(".form-grid") ? ctx.style(".form-grid", "grid-template-columns").split(" ").length : 0, 1) },
+      ],
+      solution: { html: `<section id="booking">
+  <h2>Бронювання</h2>
+  <form>
+    <div class="form-grid">
+      <div class="field">
+        <label for="guest-name">Ім'я</label>
+        <input id="guest-name" name="name" required minlength="2">
+      </div>
+      <div class="field">
+        <label for="guest-email">Пошта</label>
+        <input id="guest-email" name="email" type="email" required>
+      </div>
+      <div class="field">
+        <label for="checkin">Дата заїзду</label>
+        <input id="checkin" name="checkin" type="date" required>
+      </div>
+      <div class="field">
+        <label for="nights">Ночей</label>
+        <input id="nights" name="nights" type="number" min="1" max="14">
+      </div>
+      <div class="field">
+        <label for="room">Номер</label>
+        <select id="room" name="room" required>
+          <option value="">Оберіть номер</option>
+          <option value="standard">Стандарт</option>
+          <option value="lux">Люкс</option>
+          <option value="penthouse">Пентхаус</option>
+        </select>
+      </div>
+    </div>
+    <fieldset>
+      <legend>Додаткові послуги</legend>
+      <input id="breakfast" name="breakfast" type="checkbox">
+      <label for="breakfast">Сніданок</label>
+      <input id="spa" name="spa" type="checkbox">
+      <label for="spa">Спа</label>
+    </fieldset>
+    <button type="submit">Забронювати</button>
+  </form>
+</section>
+`, css: `.form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+fieldset {
+  margin: 16px 0;
+}
+
+@media (min-width: 600px) {
+  .form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+` },
+      hint: "Обов'язковий `select` вважається порожнім, коли вибрано опцію з `value=\"\"`.",
+      difficulty: 3,
+    }),
+    L(12, {
+      id: 53,
+      title: "Перемикач теми «Люм'єр»",
+      concept: "Повноцінна тема: токени кольорів у змінних, ручний вибір через `data-theme` на `<html>` і повага до системних налаштувань — `@media (prefers-color-scheme: dark)` вмикає темну тему, якщо користувач явно не обрав світлу (`:root:not([data-theme=\"light\"])`). Плавна зміна кольорів — через `transition`, яку вимикають для `prefers-reduced-motion`.",
+      example: `@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121314;
+  }
+}`,
+      missionStory: "Гості «Люм'єр» гортають сайт і вдень на пляжі, і вночі в ліжку. Фінальний штрих — тема, що поважає і систему, і вибір гостя.",
+      worldEvent: "Гранд-готель відчинив двері — острів будівельників завершено!",
+      taskType: "write-markup",
+      prompt: "Скрипт `theme.js` (лише для читання) ставить `data-theme` на `<html>`. Зроби:\n- кнопці `.theme-toggle` — `aria-label=\"Перемкнути тему\"`;\n- `:root`: `--bg: #ffffff`, `--text: #1b1612`, `--card: #f3eee2`;\n- `[data-theme=\"dark\"]`: `--bg: #121314`, `--text: #f3f2ee`, `--card: #1f2226`;\n- ті самі темні значення в `@media (prefers-color-scheme: dark)` для `:root:not([data-theme=\"light\"])`;\n- `body` — фон і текст зі змінних, `transition: background-color 0.3s`; `.card` — фон `var(--card)`;\n- у `@media (prefers-reduced-motion: reduce)` — `body { transition: none; }`.",
+      readonlyFiles: [{ name: "theme.js", code: `const root = document.documentElement;
+const toggle = document.querySelector(".theme-toggle");
+const saved = localStorage.getItem("lumiere-theme");
+if (saved) root.dataset.theme = saved;
+
+toggle.addEventListener("click", () => {
+  const dark = root.dataset.theme === "dark" ||
+    (!root.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
+  root.dataset.theme = dark ? "light" : "dark";
+  localStorage.setItem("lumiere-theme", root.dataset.theme);
+});` }],
+      starterHtml: `<header class="topbar">
+  <span class="logo">Люм'єр</span>
+  <button class="theme-toggle" type="button">◐</button>
+</header>
+<main>
+  <article class="card">
+    <h2>Номер «Світанок»</h2>
+    <p>Вид на море, сніданок включено.</p>
+  </article>
+</main>
+`,
+      starterCss: `/* тема «Люм'єр» */
+`,
+      testCases: [
+        { name: "Кнопка має aria-label", check: (ctx) => eq(ctx, ctx.attr(".theme-toggle", "aria-label"), "Перемкнути тему") },
+        // Системна тема може бути темною, тому світлу перевіряємо з явним вибором користувача.
+        { name: "data-theme=\"light\" — світла тема", check: (ctx) => { ctx.doc.documentElement.dataset.theme = "light"; return eq(ctx, [ctx.style("body", "background-color"), ctx.style("body", "color"), ctx.style(".card", "background-color")].join(" / "), [ctx.color("#ffffff"), ctx.color("#1b1612"), ctx.color("#f3eee2")].join(" / ")); } },
+        { name: "data-theme=\"dark\" — темна тема", check: (ctx) => { ctx.doc.documentElement.dataset.theme = "dark"; return eq(ctx, [ctx.style("body", "background-color"), ctx.style("body", "color"), ctx.style(".card", "background-color")].join(" / "), [ctx.color("#121314"), ctx.color("#f3f2ee"), ctx.color("#1f2226")].join(" / ")); } },
+        { name: "Системна темна тема, якщо не обрано світлу", check: (ctx) => { const r = ctx.rules(/:root:not\(\[data-theme="?light"?\]\)/).find((x) => x.media && /prefers-color-scheme:\s*dark/.test(x.media)); return { pass: !!r && r.rule.style.getPropertyValue("--bg").trim() === "#121314" && r.rule.style.getPropertyValue("--card").trim() === "#1f2226", actual: r ? "--bg: " + r.rule.style.getPropertyValue("--bg").trim() : "правила в @media (prefers-color-scheme: dark) немає", expected: "--bg: #121314" }; } },
+        { name: "Плавна зміна й повага до reduced-motion", check: (ctx) => { const off = ctx.rules(/^body$/).some((x) => x.media && /prefers-reduced-motion:\s*reduce/.test(x.media) && x.rule.style.getPropertyValue("transition-property") === "none"); const base = ctx.rules(/^body$/).find((x) => !x.media && x.rule.style.getPropertyValue("transition-property")); const t = base ? base.rule.style.getPropertyValue("transition-property") + " " + base.rule.style.getPropertyValue("transition-duration") : "переходу немає"; return { pass: !!base && /background-color/.test(t) && /0.3s/.test(t) && off, actual: t + (off ? ", reduced-motion: none" : ", reduced-motion не враховано"), expected: "background-color 0.3s, reduced-motion: none" }; } },
+      ],
+      solution: { html: `<header class="topbar">
+  <span class="logo">Люм'єр</span>
+  <button class="theme-toggle" type="button" aria-label="Перемкнути тему">◐</button>
+</header>
+<main>
+  <article class="card">
+    <h2>Номер «Світанок»</h2>
+    <p>Вид на море, сніданок включено.</p>
+  </article>
+</main>
+`, css: `:root {
+  --bg: #ffffff;
+  --text: #1b1612;
+  --card: #f3eee2;
+}
+
+[data-theme="dark"] {
+  --bg: #121314;
+  --text: #f3f2ee;
+  --card: #1f2226;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121314;
+    --text: #f3f2ee;
+    --card: #1f2226;
+  }
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  transition: background-color 0.3s;
+}
+
+.card {
+  padding: 16px;
+  background: var(--card);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+}
+` },
+      hint: "Блок `@media (prefers-color-scheme: dark)` містить те саме, що й `[data-theme=\"dark\"]`, лише з іншим селектором.",
       difficulty: 3,
     }),
   ];
 
   window.WORLD_DATA = window.WORLD_DATA || {};
   window.WORLD_DATA.web = {
+    // Версія змісту: при перебудові світу старий прогрес скидається (див. game.js).
+    contentVersion: 2,
     locations: LOCATIONS,
     levels: LEVELS,
     // Великі практичні місії світу.
-    projects: [9, 23, 47, 54, 60],
+    projects: [14, 21, 51, 52, 53],
   };
 })();

@@ -80,6 +80,11 @@
       });
       safeRemove(LAST_WORLD_KEY);
     },
+    // Скидає прогрес і чернетки одного світу.
+    resetWorld(world) {
+      safeRemove(PROGRESS_KEY + suffix(world));
+      safeRemove(DRAFTS_KEY + suffix(world));
+    },
     // Чернетки — довільний рядок (для HTML/CSS-світу там JSON з кількома файлами).
     getDraft(id, world) {
       const drafts = loadDrafts(world);

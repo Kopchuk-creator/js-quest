@@ -50,7 +50,11 @@
 
   // Мінімальна розмітка для текстів рівнів: `код` → <code>.
   function md(text) {
-    return esc(text).replace(/`([^`]+)`/g, "<code>$1</code>");
+    // Переноси рядків — <br>, рядки «- …» — пункти списку (лишаємось усередині <p>).
+    return esc(text)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\n- /g, "<br>• ")
+      .replace(/\n/g, "<br>");
   }
 
   /* ---------- підсвітка JavaScript ---------- */

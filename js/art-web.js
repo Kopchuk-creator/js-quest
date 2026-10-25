@@ -1,8 +1,9 @@
 /* =========================================================
    art-web.js — світ «Острів будівельників» (HTML і CSS).
    Тропічний острів, на якому з кожною місією з риштування
-   виростають будівлі: причал, квартал, ринок, фарбарня,
-   кузня, доки, місто-сітка й маяк.
+   виростають будівлі: квартал, фарбарня, доки, місто-сітка,
+   маяк, майстерня, ярмарок, сад, вітряк, бібліотека,
+   обсерваторія й гранд-готель «Люм'єр».
    ========================================================= */
 (function () {
   "use strict";
@@ -12,20 +13,6 @@
   /* ---------- предмети-трофеї (12×12) ---------- */
 
   Art.addItems({
-    brick: [
-      "............",
-      "............",
-      "kkkkkkkkkkkk",
-      "krrrrrrrrrRk",
-      "krrwrrrrwrRk",
-      "krwrrrrrrwRk",
-      "krrwrrrrwrRk",
-      "kRRRRRRRRRRk",
-      "kkkkkkkkkkkk",
-      "............",
-      "............",
-      "............",
-    ],
     sign: [
       "kkkkkkkkkkkk",
       "kttttttttttk",
@@ -40,20 +27,6 @@
       "....kTTk....",
       "....kkkk....",
     ],
-    quill: [
-      "..........kk",
-      ".........kwk",
-      "........kwgk",
-      ".......kwgk.",
-      "......kwgk..",
-      ".....kwgk...",
-      "....kwgk....",
-      "...kggk.....",
-      "..kGk.......",
-      ".kGk..kkkk..",
-      "kGk..kBBBBk.",
-      "kk...kkkkkk.",
-    ],
     brush: [
       "........kkk.",
       ".......kRrk.",
@@ -67,20 +40,6 @@
       "ktTk........",
       "kTk.........",
       "kk..........",
-    ],
-    crate: [
-      "kkkkkkkkkkkk",
-      "kYYYYYYYYYYk",
-      "kYkkkkkkkkYk",
-      "kYkbbbbbbkYk",
-      "kYkbccccbkYk",
-      "kYkbccccbkYk",
-      "kYkbccccbkYk",
-      "kYkbccccbkYk",
-      "kYkbbbbbbkYk",
-      "kYkkkkkkkkYk",
-      "kYYYYYYYYYYk",
-      "kkkkkkkkkkkk",
     ],
     anchor: [
       ".....GG.....",
@@ -123,6 +82,104 @@
       ".kYyCCCCyYk.",
       "..kkYYYYkk..",
       "....kkkk....",
+    ],
+    palette: [
+      "...kkkkkk...",
+      ".kkqqqqqqkk.",
+      "kqqrrqqyyqqk",
+      "kqqrrqqyyqqk",
+      "kqqqqqqqqqqk",
+      "kqmmqqqqbbqk",
+      "kqmmqqqqbbqk",
+      "kqqqqqkkqqqk",
+      ".kqqqk..kqk.",
+      "..kqqk..kqk.",
+      "...kkk...k..",
+      "............",
+    ],
+    balloon: [
+      "...kkkkkk...",
+      "..krrrrrwk..",
+      ".krrrrrrrwk.",
+      ".krrrrrrrrk.",
+      ".kRrrrrrrrk.",
+      ".kRRrrrrrRk.",
+      "..kRRrrrRk..",
+      "...kRRRRk...",
+      "....k..k....",
+      "....k..k....",
+      "...kttttk...",
+      "...kTTTTk...",
+    ],
+    flower: [
+      "....kkkk....",
+      "...krrrrk...",
+      "..krrwrrrk..",
+      "..krryyrrk..",
+      "..krryyrrk..",
+      "...krrrrk...",
+      "....kkkk....",
+      ".....km.....",
+      "..kk.km.kk..",
+      ".kmmkkmkmmk.",
+      "..kkkmmkkk..",
+      ".....kk.....",
+    ],
+    bolt: [
+      "......kkkk..",
+      ".....kyyyk..",
+      "....kyyyk...",
+      "...kyyyk....",
+      "..kyyyykkk..",
+      ".kyyyyyyyk..",
+      "..kkkyyyk...",
+      "....kyyk....",
+      "...kyyk.....",
+      "..kyyk......",
+      "..kyk.......",
+      "..kk........",
+    ],
+    book: [
+      "............",
+      ".kkkkkkkkkk.",
+      "kbbbbkkbbbbk",
+      "kbwwbkkbwwbk",
+      "kbbbbkkbbbbk",
+      "kbwwbkkbwwbk",
+      "kbbbbkkbbbbk",
+      "kbbbbkkbbbbk",
+      "kBBBBkkBBBBk",
+      "kqqqqkkqqqqk",
+      ".kkkkkkkkkk.",
+      "............",
+    ],
+    star: [
+      ".....kk.....",
+      "....kyyk....",
+      "....kyyk....",
+      "kkkkkyykkkkk",
+      "kyyyyyyyyyyk",
+      ".kyyywyyyyk.",
+      "..kyyyyyyk..",
+      "..kyyyyyyk..",
+      ".kyyykkyyyk.",
+      ".kyyk..kyyk.",
+      "kyyk....kyyk",
+      "kkk......kkk",
+    ],
+    bell: [
+      ".....kk.....",
+      "....kyyk....",
+      "...kkkkkk...",
+      "..kyyyyyyk..",
+      "..kywyyyyk..",
+      "..kywyyyyk..",
+      ".kyyyyyyyyk.",
+      ".kyyyyyyyyk.",
+      "kYYYYYYYYYYk",
+      "kkkkkkkkkkkk",
+      ".....kk.....",
+      ".....kk.....",
     ],
   });
 
@@ -171,28 +228,8 @@
   /* ---------- орієнтири локацій ---------- */
 
   const LANDMARKS = {
-    // 1. Причал тегів: дошки настилу додаються, з'являються ящики-теги, кран і корабель.
-    1: { w: 44, h: 30, draw(g, p, f) {
-      g.r(0, 22, 44, 8, "#2a85c4");
-      for (let i = 0; i < 6; i++) g.r(3 + i * 7 + (f % 2), 25 + (i % 2), 3, 1, "#7fd0f0");
-      const planks = Math.max(1, Math.round(p * 8));
-      for (let i = 0; i < 8; i++) {
-        const x = 4 + i * 4;
-        if (i < planks) { g.r(x, 18, 4, 4, C.k); g.r(x, 18, 3, 3, C.woodL); }
-        g.r(x + 1, 22, 1, 6, C.woodD);
-      }
-      if (p >= 0.25) { g.r(6, 12, 7, 6, C.k); g.r(7, 13, 5, 4, C.wood); g.p(8, 15, "#ffffff"); g.p(10, 14, "#ffffff"); }
-      if (p >= 0.5) { g.r(14, 13, 6, 5, C.k); g.r(15, 14, 4, 3, "#e8663d"); }
-      if (p >= 0.75) { g.r(30, 2, 2, 16, C.woodD); g.r(22, 2, 10, 2, C.woodD); g.r(23, 4, 1, 6, "#9aa1a9"); g.r(22, 10, 3, 2, "#f7d23a"); }
-      else scaffold(g, 28, 6, 8, 12);
-      if (p >= 1) {
-        g.r(33, 20, 11, 4, C.k); g.r(34, 20, 9, 3, C.woodD);
-        g.r(38, 9, 1, 11, C.woodD); g.tri(41, 19, 3, 9, "#f2f5f7", "#d4dbe2");
-      }
-    } },
-
-    // 2. Квартал семантики: будинки з вивісками виростають по одному.
-    2: { w: 44, h: 34, draw(g, p) {
+    // 1. Квартал семантики: будинки з вивісками виростають по одному.
+    1: { w: 44, h: 34, draw(g, p) {
       g.r(0, 30, 44, 4, "#b5bbc2");
       const built = Math.round(p * 3);
       const spots = [[2, 30, 12, 14, "#f2c79a", "#e0503c"], [16, 30, 12, 18, "#e8c97e", "#3f78b5"], [30, 30, 12, 12, "#f3eee2", "#5aa843"]];
@@ -204,57 +241,18 @@
       });
     } },
 
-    // 3. Ринок форм: намети з'являються, у фіналі — прапорці.
-    3: { w: 44, h: 30, draw(g, p, f) {
-      g.r(0, 26, 44, 4, "#d6c27e");
-      const stalls = Math.round(p * 3);
-      [[2, "#e0503c"], [16, "#3f78b5"], [30, "#f7d23a"]].forEach(([x, color], i) => {
-        if (i < stalls) {
-          g.r(x, 18, 12, 8, C.k); g.r(x + 1, 19, 10, 7, C.cloth);
-          g.r(x - 1, 13, 14, 5, C.k);
-          for (let s = 0; s < 12; s += 2) g.r(x + s, 14, 2, 3, s % 4 ? "#ffffff" : color);
-          g.r(x + 2, 21, 3, 2, ["#c08a52", "#9aa1a9", "#5aa843"][i]);
-        } else scaffold(g, x, 14, 12, 12);
-      });
-      if (p >= 1) {
-        for (let i = 0; i < 6; i++) g.r(3 + i * 7, 8 + ((i + f) % 2), 3, 3, ["#e0503c", "#f7d23a", "#5ee0a0"][i % 3]);
-        g.r(0, 9, 44, 1, C.woodD);
-      }
-    } },
-
-    // 4. Фарбарня: на стіні проступають кольорові смуги, біля входу — бочки фарби.
-    4: { w: 40, h: 34, draw(g, p) {
+    // 2. Фарбарня селекторів: на стіні проступають кольорові смуги, біля входу — бочки фарби.
+    2: { w: 40, h: 34, draw(g, p) {
       house(g, 4, 32, 30, 20, "#f3eee2", "#9a6234", p >= 1);
       const stripes = Math.round(p * 5);
       ["#e0503c", "#f7a33a", "#f7d23a", "#5aa843", "#3f78b5"].forEach((c, i) => {
-        if (i < stripes) g.r(7 + i * 5, 17, 4, 9, c);
-        else g.r(7 + i * 5, 17, 4, 9, "#d8d2c4");
+        g.r(7 + i * 5, 17, 4, 9, i < stripes ? c : "#d8d2c4");
       });
       [[0, "#e0503c"], [34, "#3f78b5"]].forEach(([x, c]) => { g.r(x, 26, 6, 6, C.k); g.r(x + 1, 27, 4, 5, C.wood); g.r(x + 1, 27, 4, 1, c); });
     } },
 
-    // 5. Кузня коробок: вкладені рамки (margin/border/padding) і труба з вогнем.
-    5: { w: 40, h: 36, draw(g, p, f) {
-      g.r(4, 14, 32, 20, C.k);
-      g.r(5, 15, 30, 19, "#6d737c");
-      const rings = Math.round(p * 3);
-      const colors = ["#f7a33a", "#1b1612", "#62d8ff"];
-      for (let i = 0; i < 3; i++) {
-        const inset = 3 + i * 3;
-        const col = i < rings ? colors[i] : "#575c64";
-        g.r(5 + inset, 15 + inset, 30 - inset * 2, 1, col);
-        g.r(5 + inset, 33 - inset, 30 - inset * 2, 1, col);
-        g.r(5 + inset, 15 + inset, 1, 19 - inset * 2, col);
-        g.r(34 - inset, 15 + inset, 1, 19 - inset * 2, col);
-      }
-      g.r(26, 2, 6, 13, C.k); g.r(27, 3, 4, 12, "#9aa1a9");
-      if (p > 0) { g.r(27, 0, 4, 3, f % 2 ? C.fire1 : C.fire2); }
-      if (p >= 1) g.r(18, 22, 4, 4, f % 2 ? "#fff6c8" : C.gold);
-      g.r(0, 30, 6, 4, "#3a3e48");
-    } },
-
-    // 6. Флекс-доки: човни вишиковуються рівним рядом.
-    6: { w: 44, h: 26, draw(g, p, f) {
+    // 3. Флекс-доки: човни вишиковуються рівним рядом.
+    3: { w: 44, h: 26, draw(g, p, f) {
       g.r(0, 14, 44, 12, "#2a85c4");
       g.r(0, 12, 44, 3, C.k); g.r(0, 12, 44, 2, C.woodL);
       const boats = Math.round(p * 4);
@@ -272,8 +270,8 @@
       for (let i = 0; i < 5; i++) g.r(1 + i * 10, 24, 3, 1, "#7fd0f0");
     } },
 
-    // 7. Гридбург: сітка 3×3 будинків заповнюється клітинка за клітинкою.
-    7: { w: 42, h: 36, draw(g, p) {
+    // 4. Гридбург: сітка 3×3 будинків заповнюється клітинка за клітинкою.
+    4: { w: 42, h: 36, draw(g, p) {
       g.r(0, 6, 42, 30, "#b5bbc2");
       const filled = Math.round(p * 9);
       for (let n = 0; n < 9; n++) {
@@ -283,8 +281,8 @@
       }
     } },
 
-    // 8. Маяк: вежа росте сегментами, у фіналі — світло й промені.
-    8: { w: 28, h: 64, draw(g, p, f) {
+    // 5. Маяк адаптивності: вежа росте сегментами, у фіналі — світло.
+    5: { w: 28, h: 64, draw(g, p, f) {
       g.r(2, 56, 24, 8, C.k); g.r(3, 57, 22, 7, "#6d737c");
       const segments = Math.max(1, Math.round(p * 5));
       for (let s = 0; s < 5; s++) {
@@ -300,6 +298,137 @@
         g.r(10, 0, 8, 5, C.k); g.r(11, 1, 6, 3, f % 2 ? "#fff6c8" : C.gold);
       }
     } },
+
+    // 6. Палітрова майстерня: на мольберті з'являються мазки, у фіналі — ще й веселка на даху.
+    6: { w: 42, h: 34, draw(g, p) {
+      house(g, 2, 32, 22, 16, "#f3eee2", "#c4472a", p >= 1);
+      g.r(6, 22, 6, 5, C.k); g.r(7, 23, 4, 3, "#9fd3f0");
+      g.r(29, 22, 1, 11, C.woodD); g.r(38, 22, 1, 11, C.woodD); g.r(33, 22, 1, 9, C.woodD);
+      g.r(27, 10, 14, 13, C.k); g.r(28, 11, 12, 11, "#ffffff");
+      const dabs = Math.round(p * 4);
+      ["#e0503c", "#f7d23a", "#5aa843", "#3f78b5"].forEach((c, i) => {
+        if (i < dabs) g.r(29 + (i % 2) * 6, 12 + Math.floor(i / 2) * 5, 4, 4, c);
+      });
+      if (p >= 1) ["#e0503c", "#f7a33a", "#f7d23a", "#5aa843", "#3f78b5"].forEach((c, i) => g.r(6 + i * 3, 4 + i, 3, 2, c));
+    } },
+
+    // 7. Ярмарок анімацій: намет-карусель, повітряна куля злітає вище з кожною місією.
+    7: { w: 44, h: 42, draw(g, p, f) {
+      g.r(0, 38, 44, 4, "#d6c27e");
+      if (p >= 0.4) {
+        g.r(6, 26, 24, 12, C.k); g.r(7, 27, 22, 11, "#ffffff");
+        for (let s = 0; s < 22; s += 4) g.r(7 + s, 27, 2, 11, "#e0503c");
+        g.r(16, 31, 4, 7, C.k);
+        g.tri(18, 27, 14, 10, "#e0503c", "#962a1f");
+        g.r(18, 14, 1, 4, C.woodD); g.r(19, 14, 3, 2, C.gold);
+      } else scaffold(g, 6, 22, 24, 16);
+      if (p > 0) {
+        const by = Math.round(26 - p * 22) + (f % 2);
+        g.r(33, by, 9, 8, C.k); g.r(34, by + 1, 7, 6, "#e0503c"); g.r(35, by + 1, 2, 4, "#ff8a76");
+        g.p(35, by + 8, C.k); g.p(40, by + 8, C.k); g.p(35, by + 9, C.k); g.p(40, by + 9, C.k);
+        g.r(35, by + 10, 6, 3, C.k); g.r(36, by + 10, 4, 2, C.wood);
+      }
+      if (p >= 1) {
+        g.r(0, 6, 30, 1, C.woodD);
+        for (let i = 0; i < 5; i++) g.r(1 + i * 6, 7 + ((i + f) % 2), 3, 3, ["#e0503c", "#f7d23a", "#5ee0a0", "#7cb7ff", "#ff8fc0"][i]);
+      }
+    } },
+
+    // 8. Сад доступності: клумби розквітають, у фіналі — пандус і лавка.
+    8: { w: 44, h: 28, draw(g, p) {
+      g.r(0, 20, 44, 8, "#5aa843");
+      g.r(0, 25, 44, 3, "#e2cf8e");
+      const blooms = Math.round(p * 4);
+      for (let i = 0; i < 4; i++) {
+        const x = 2 + i * 10;
+        g.r(x, 15, 8, 6, C.k); g.r(x + 1, 16, 6, 4, "#7a5230");
+        if (i < blooms) {
+          const col = ["#ff8fc0", "#f7d23a", "#ffffff", "#b07cff"][i];
+          g.r(x + 2, 12, 1, 4, "#2f7d3a"); g.r(x + 5, 11, 1, 5, "#2f7d3a");
+          g.r(x + 1, 10, 3, 3, col); g.r(x + 4, 9, 3, 3, col);
+          g.p(x + 2, 11, "#f7d23a"); g.p(x + 5, 10, "#f7d23a");
+        } else g.p(x + 3, 15, "#3f8530");
+      }
+      if (p >= 1) {
+        for (let i = 0; i < 6; i++) g.r(30 + i * 2, 23 - i, 2, 1 + i, "#c1c6cc");
+        g.r(2, 22, 10, 2, C.woodD); g.r(2, 24, 1, 2, C.woodD); g.r(11, 24, 1, 2, C.woodD);
+      }
+    } },
+
+    // 9. Вітряки швидкості: вітрила додаються, лопаті крутяться.
+    9: { w: 34, h: 48, draw(g, p, f) {
+      for (let y = 16; y < 46; y++) {
+        const half = 5 + Math.floor((y - 16) / 6);
+        g.r(16 - half, y, half * 2 + 2, 1, C.k);
+        g.r(17 - half, y, half * 2, 1, (y >> 2) % 2 ? "#f3eee2" : "#e2d8c4");
+      }
+      g.r(15, 39, 4, 7, C.woodD);
+      g.r(10, 10, 14, 7, C.k); g.r(11, 11, 12, 5, C.wood);
+      const sails = Math.max(1, Math.round(p * 4));
+      const a0 = p > 0 ? f * 0.4 : 0.35;
+      for (let k = 0; k < 4; k++) {
+        const a = a0 + (k * Math.PI) / 2;
+        const nx = Math.cos(a + Math.PI / 2), ny = Math.sin(a + Math.PI / 2);
+        for (let r = 2; r < 15; r++) {
+          const x = 17 + Math.cos(a) * r, y = 13 + Math.sin(a) * r;
+          if (k < sails && r > 4) {
+            g.p(Math.round(x + nx), Math.round(y + ny), "#ffffff");
+            g.p(Math.round(x + nx * 2), Math.round(y + ny * 2), "#e2d8c4");
+          }
+          g.p(Math.round(x), Math.round(y), C.woodD);
+        }
+      }
+      g.r(16, 12, 3, 3, C.k);
+    } },
+
+    // 10. Бібліотека порядку: полиці між колонами заповнюються книжками.
+    10: { w: 44, h: 38, draw(g, p) {
+      g.r(2, 32, 40, 6, C.k); g.r(3, 33, 38, 2, "#c1c6cc"); g.r(3, 35, 38, 2, "#b5bbc2");
+      g.r(4, 14, 36, 18, C.k); g.r(5, 15, 34, 17, "#f3eee2");
+      g.tri(22, 14, 20, 9, "#d8d2c4", "#b5a888");
+      const filled = Math.round(p * 4);
+      for (let i = 0; i < 5; i++) g.r(5 + i * 8, 15, 2, 17, "#d8d2c4");
+      for (let i = 0; i < 4; i++) {
+        const x = 8 + i * 8;
+        for (let row = 0; row < 3; row++) {
+          const y = 17 + row * 5;
+          g.r(x, y + 3, 5, 1, C.woodD);
+          if (i < filled) for (let b = 0; b < 5; b++) g.r(x + b, y + (b % 2), 1, 3 - (b % 2), ["#e0503c", "#3f78b5", "#5aa843", "#f7d23a", "#9a6234"][(i + b + row) % 5]);
+        }
+      }
+      if (p >= 1) { g.r(19, 8, 6, 4, C.k); g.r(20, 9, 4, 2, C.gold); }
+    } },
+
+    // 11. Обсерваторія нового CSS: телескоп висувається, у фіналі — зорі.
+    11: { w: 40, h: 40, draw(g, p, f) {
+      g.ellipse(20, 24, 13, 12, C.k);
+      g.ellipse(20, 24, 12, 11, "#3f5a8c");
+      g.r(19, 13, 2, 11, "#1b2a44");
+      const len = 3 + Math.round(p * 11);
+      for (let t = 0; t < len; t++) g.r(20 + t, 20 - Math.round(t * 0.75), 3, 3, t === len - 1 ? C.k : C.goldD);
+      g.r(6, 24, 28, 16, C.k); g.r(7, 25, 26, 15, "#d8d2c4");
+      g.r(17, 31, 6, 9, C.k); g.r(18, 32, 4, 8, C.woodD);
+      g.r(9, 28, 4, 4, "#1b2a44"); g.r(27, 28, 4, 4, "#1b2a44");
+      if (p >= 1) [[3, 4], [10, 1], [33, 2], [37, 12], [2, 14]].forEach(([x, y], i) => { if ((i + f) % 3) g.p(x, y, "#fff6c8"); });
+    } },
+
+    // 12. Гранд-готель «Люм'єр»: поверх за поверхом, у фіналі — дах, купол і світло у вікнах.
+    12: { w: 48, h: 44, draw(g, p, f) {
+      g.r(0, 40, 48, 4, "#e2cf8e");
+      const floors = Math.max(1, Math.round(p * 3));
+      for (let fl = 0; fl < 3; fl++) {
+        const y = 30 - fl * 10;
+        if (fl < floors) {
+          g.r(4, y, 40, 10, C.k); g.r(5, y + 1, 38, 9, "#f3eee2");
+          for (let w = 0; w < 6; w++) g.r(8 + w * 6, y + 3, 3, 4, p >= 1 ? ((w + fl + f) % 5 ? "#ffe061" : "#fff6c8") : "#5a6a7a");
+        } else scaffold(g, 4, y, 40, 10);
+      }
+      g.r(20, 34, 8, 6, C.k); g.r(21, 35, 6, 5, C.woodD); g.r(18, 32, 12, 2, "#c4472a");
+      if (p >= 1) {
+        g.r(2, 6, 44, 5, C.k); g.r(3, 7, 42, 3, "#3f5a8c");
+        g.r(20, 0, 8, 7, C.k); g.r(21, 1, 6, 5, C.gold);
+      }
+    } },
   };
 
   /* ---------- біоми сцен ---------- */
@@ -313,44 +442,52 @@
   };
 
   const BIOMES = {
-    1: { sky: ["#6fc2ee", "#d6f0fb"], far: "#2a85c4", ground: ["#e2cf8e", "#d6c27e"], hills: "sea", drawGround: palms },
-    2: { sky: ["#86c8ee", "#e2f2fa"], far: "#5a9a45", ground: ["#b5bbc2", "#a9b0b8"], hills: "hills" },
-    3: { sky: ["#7fc3ec", "#f2eecf"], far: "#5aa843", ground: ["#d6c27e", "#e2cf8e"], hills: "hills", drawGround: palms },
-    4: { sky: ["#f2b77a", "#fde2a8"], far: "#7a9a5a", ground: ["#5aa843", "#67b64b"], hills: "trees" },
-    5: { sky: ["#3a3640", "#6a5a4e"], far: "#2a2830", ground: ["#4a4650", "#5a5662"], hills: "stalactites", noClouds: true },
-    6: { sky: ["#6aaee0", "#cfe8f7"], far: "#2a85c4", ground: ["#9a6234", "#c08a52"], hills: "sea" },
-    7: { sky: ["#86c8ee", "#e2f2fa"], far: "#8a9099", ground: ["#b5bbc2", "#c1c6cc"], hills: "hills" },
-    8: { sky: ["#1f3a5a", "#f2a65a"], far: "#2a85c4", ground: ["#6d737c", "#8a9099"], hills: "sea", drawFar: sea },
+    1: { sky: ["#86c8ee", "#e2f2fa"], far: "#5a9a45", ground: ["#b5bbc2", "#a9b0b8"], hills: "hills" },
+    2: { sky: ["#f2b77a", "#fde2a8"], far: "#7a9a5a", ground: ["#5aa843", "#67b64b"], hills: "trees" },
+    3: { sky: ["#6aaee0", "#cfe8f7"], far: "#2a85c4", ground: ["#9a6234", "#c08a52"], hills: "sea" },
+    4: { sky: ["#86c8ee", "#e2f2fa"], far: "#8a9099", ground: ["#b5bbc2", "#c1c6cc"], hills: "hills" },
+    5: { sky: ["#1f3a5a", "#f2a65a"], far: "#2a85c4", ground: ["#6d737c", "#8a9099"], hills: "sea", drawFar: sea },
+    6: { sky: ["#86c8ee", "#f6e7cf"], far: "#5a9a45", ground: ["#d9a066", "#e2b47c"], hills: "hills" },
+    7: { sky: ["#3a2f5a", "#f2a65a"], far: "#6a5a7a", ground: ["#d6c27e", "#e2cf8e"], hills: "trees" },
+    8: { sky: ["#7fc3ec", "#e8f7e0"], far: "#5aa843", ground: ["#5aa843", "#67b64b"], hills: "trees" },
+    9: { sky: ["#6fc2ee", "#e2f2fa"], far: "#2a85c4", ground: ["#e2cf8e", "#d6b85e"], hills: "sea" },
+    10: { sky: ["#86c8ee", "#e2f2fa"], far: "#8a9099", ground: ["#b5bbc2", "#c1c6cc"], hills: "hills" },
+    11: { sky: ["#0d1b2a", "#3a4a7a"], far: "#2a2830", ground: ["#6d737c", "#8a9099"], hills: "hills", noClouds: true },
+    12: { sky: ["#f2a65a", "#fde2a8"], far: "#2a85c4", ground: ["#e2cf8e", "#d6c27e"], hills: "sea", drawGround: palms },
   };
 
   /* ---------- 3D-острів ---------- */
 
   const MAP_W = 400, MAP_H = 250, CELL = 6.25;
 
+  // Маршрут спіраллю: від кварталу на південному заході, повз доки в бухті
+  // й маяк на мисі — до обсерваторії на пагорбі й готелю на сході.
   const POINTS = {
-    1: [80, 192], 2: [112, 140], 3: [152, 92], 4: [214, 70],
-    5: [206, 140], 6: [262, 188], 7: [292, 124], 8: [340, 62],
+    1: [80, 190], 2: [100, 130], 3: [124, 72], 4: [186, 82],
+    5: [250, 52], 6: [318, 80], 7: [332, 140], 8: [262, 128],
+    9: [196, 140], 10: [178, 196], 11: [258, 200], 12: [330, 186],
   };
   const ROUTE = Object.keys(POINTS).map((k) => POINTS[k]);
 
   const ell = (x, y, cx, cy, rx, ry) => Math.hypot((x - cx) / rx, (y - cy) / ry);
+  // Пагорб під обсерваторією.
+  const hillAt = (x, y) => 6.5 - Math.hypot(x - 262, (y - 206) * 1.2) / 9;
 
   function tile(i, j) {
     const x = i * CELL + CELL / 2, y = j * CELL + CELL / 2;
     const n = fbm(x / 34, y / 34, 7);
     const wobble = (n - 0.5) * 0.18;
-    let d = Math.min(ell(x, y, 200, 130, 165, 102), ell(x, y, 340, 62, 42, 30)) + wobble;
-    if (ell(x, y, 272, 236, 42, 30) < 1) d = Math.max(d, 1.08); // бухта біля доків
+    let d = Math.min(ell(x, y, 200, 130, 165, 102), ell(x, y, 250, 38, 34, 24)) + wobble;
+    if (ell(x, y, 104, 32, 40, 24) < 1) d = Math.max(d, 1.08); // бухта біля доків
     if (d > 1.14) return { type: "deep", h: 0 };
     if (d > 1.0) return { type: "water", h: 0 };
     if (d > 0.92) return { type: "sand", h: 1 };
     // Скелястий мис під маяком.
-    if (ell(x, y, 340, 62, 42, 30) < 0.95) return { type: "rock", h: 5 + (n > 0.55 ? 1 : 0) };
-    // Пагорби на північному заході.
-    const hill = 6.5 - Math.hypot(x - 110, (y - 62) * 1.2) / 9;
+    if (ell(x, y, 250, 38, 34, 24) < 0.95) return { type: "rock", h: 5 + (n > 0.55 ? 1 : 0) };
+    const hill = hillAt(x, y);
+    // Бруківка вздовж маршруту (на пагорбі — на його висоті).
+    if (distToPolyline(x, y, ROUTE) < 4.5) return { type: "plaza", h: Math.max(2, Math.round(hill)) };
     if (hill > 2.6) return { type: hill > 5.2 ? "forest" : "grass", h: Math.round(hill) };
-    // Бруківка вздовж маршруту.
-    if (distToPolyline(x, y, ROUTE) < 4.5) return { type: "plaza", h: 2 };
     return { type: "grass", h: 2 + (n > 0.62 ? 1 : 0) };
   }
 
@@ -359,7 +496,7 @@
     for (let i = 0; i < 260; i++) {
       const x = hash(i, 1, 41) * MAP_W, y = hash(i, 2, 43) * MAP_H;
       const d = ell(x, y, 200, 130, 165, 102);
-      if (d > 0.9 || distToPolyline(x, y, ROUTE) < 9) continue;
+      if (d > 0.9 || ell(x, y, 104, 32, 46, 30) < 1 || distToPolyline(x, y, ROUTE) < 9) continue;
       if (Object.values(POINTS).some(([px, py]) => Math.hypot(x - px, y - py) < 20)) continue;
       out.push([x, y, hash(i, 3, 41) > 0.35 ? PALM : SHRUB]);
     }
@@ -386,7 +523,7 @@
       trees: trees(),
       sky: ["#4fb0e6", "#bfeaf9"],
       groundType: "plaza",
-      fx: { 1: "sparkle", 2: "gold", 3: "gold", 4: "paint", 5: "smoke", 6: "sparkle", 7: "gold", 8: "lighthouse" },
+      fx: { 1: "gold", 2: "paint", 3: "sparkle", 4: "gold", 5: "lighthouse", 6: "paint", 7: "fireworks", 8: "leaves", 9: "sparkle", 10: "gold", 11: "sparkle", 12: "fireworks" },
     },
   });
 })();

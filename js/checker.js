@@ -533,9 +533,12 @@
       frame.setAttribute("title", "Пісочниця перевірки");
       frame.tabIndex = -1;
       frame.style.cssText = "position:fixed;left:-10000px;top:0;width:" + (width || 800) + "px;height:600px;border:0;pointer-events:none;";
+      // Спершу вставляємо iframe і даємо йому ширину, а вже потім документ:
+      // інакше <picture>/медіазапити й vw можуть порахуватись для початкових 300px.
+      document.body.appendChild(frame);
+      void frame.offsetWidth;
       frame.addEventListener("load", () => resolve(frame), { once: true });
       frame.srcdoc = docHtml;
-      document.body.appendChild(frame);
     });
   }
 
@@ -583,6 +586,42 @@
       // Правила CSS, чий селектор містить рядок або відповідає регулярному виразу.
       rules: (match) => allRules().filter(({ rule }) => (match instanceof RegExp ? match.test(rule.selectorText) : rule.selectorText.includes(match))),
       media: () => allRules().filter((r) => r.media),
+      // Усі правила таблиць стилів певного типу, включно з вкладеними в @media/@container
+      // (наприклад "CSSFontFaceRule", "CSSKeyframesRule", "CSSContainerRule").
+      atRules(typeName) {
+        const out = [];
+        const walk = (rules) => Array.from(rules || []).forEach((r) => {
+          if (r.constructor && r.constructor.name === typeName) out.push(r);
+          if (r.cssRules && r.constructor.name !== "CSSKeyframesRule") walk(r.cssRules);
+        });
+        Array.from(doc.styleSheets).forEach((sheet) => { try { walk(sheet.cssRules); } catch (e) { /* ignore */ } });
+        return out;
+      },
+      keyframes(name) {
+        return this.atRules("CSSKeyframesRule").find((r) => r.name === name) || null;
+      },
+      // Матриця обчисленого transform: кут повороту, масштаб і зсув.
+      transform(target) {
+        const m = new win.DOMMatrix(win.getComputedStyle(pick(target)).transform === "none" ? undefined : win.getComputedStyle(pick(target)).transform);
+        return { angle: Math.round((Math.atan2(m.b, m.a) * 180) / Math.PI * 10) / 10, scaleX: Math.round(Math.hypot(m.a, m.b) * 1000) / 1000, x: m.e, y: m.f };
+      },
+      // Контраст тексту з фоном за WCAG (фон шукаємо вгору по предках).
+      contrast(target) {
+        const el = pick(target);
+        const parse = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+        const lum = ([r, g, b]) => {
+          const ch = [r, g, b].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+          return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+        };
+        let bg = [255, 255, 255];
+        for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+          const c = parse(win.getComputedStyle(node).backgroundColor);
+          if (c.length >= 3 && (c.length < 4 || c[3] > 0.5)) { bg = c.slice(0, 3); break; }
+        }
+        const fg = parse(win.getComputedStyle(el).color).slice(0, 3);
+        const [l1, l2] = [lum(fg), lum(bg)].sort((a, b) => b - a);
+        return Math.round(((l1 + 0.05) / (l2 + 0.05)) * 100) / 100;
+      },
       setWidth(px) {
         frame.style.width = px + "px";
         return new Promise((r) => win.requestAnimationFrame(() => r()));

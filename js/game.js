@@ -191,6 +191,15 @@
     return forWorld(world.id).completion().ratio === 1 ? "done" : "open";
   }
 
+  // Якщо зміст світу перебудовано (змінився contentVersion), старий прогрес і чернетки
+  // стосуються зовсім інших рівнів — тож такий світ починається спочатку.
+  Object.keys(window.WORLD_DATA).forEach((worldId) => {
+    const version = window.WORLD_DATA[worldId].contentVersion;
+    if (!version || GameStore.load(worldId).contentVersion === version) return;
+    GameStore.resetWorld(worldId);
+    GameStore.save(Object.assign(GameStore.load(worldId), { contentVersion: version }), worldId);
+  });
+
   // Поточний світ сторінки.
   const params = new URLSearchParams(location.search);
   let current = params.get("world");
