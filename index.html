@@ -53,6 +53,7 @@
           <section class="card map-card" aria-label="Карта світу">
             <div class="map-scroll" id="map-scroll">
               <div class="map-stage" id="map-stage">
+                <img class="map-art" id="map-art" alt="" hidden>
                 <canvas class="pixel map-canvas" id="map-canvas" role="img" aria-label="Піксельна карта королівства з одинадцятьма локаціями"></canvas>
                 <svg class="map-path" id="map-path" viewBox="0 0 400 250" preserveAspectRatio="none" aria-hidden="true"></svg>
                 <div class="map-hero" id="map-hero" aria-hidden="true"></div>
@@ -60,6 +61,7 @@
               </div>
             </div>
             <div class="map-tools" id="map-tools" role="toolbar" aria-label="Керування картою" hidden>
+              <button type="button" class="icon-btn map-mode-btn" data-tool="mode" hidden></button>
               <button type="button" class="icon-btn" data-tool="rotate-left" aria-label="Повернути карту ліворуч">&#8634;</button>
               <button type="button" class="icon-btn" data-tool="rotate-right" aria-label="Повернути карту праворуч">&#8635;</button>
               <button type="button" class="icon-btn" data-tool="zoom-in" aria-label="Наблизити">+</button>

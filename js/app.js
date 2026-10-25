@@ -121,13 +121,27 @@
     return "M" + p1.join(" ") + " C" + c1.join(" ") + " " + c2.join(" ") + " " + p2.join(" ");
   }
 
-  // Світи з воксельним описом показуються як 3D-карта; інші — як пласка.
-  const use3D = !!(worldArt.voxel && window.Map3D);
+  // Режими карти: "art" — намальована ілюстрація світу з підписами локацій,
+  // "3d" — воксельна карта (якщо світ її має), "flat" — пласка піксельна.
+  // Обраний режим запам'ятовується; за замовчуванням — ілюстрація.
+  const mapArt = (window.MAP_ART || {})[Game.WORLD_ID] || null;
+  const has3D = !!(worldArt.voxel && window.Map3D);
+  const MODE_KEY = "js-game-map-mode";
+  let mapMode = (() => {
+    let saved = null;
+    try { saved = localStorage.getItem(MODE_KEY); } catch (e) { /* ignore */ }
+    if (saved === "3d" && has3D) return "3d";
+    return mapArt ? "art" : has3D ? "3d" : "flat";
+  })();
+  let use3D = mapMode === "3d";
   let map3d = null;
   let zoom = 1;
 
   // Геометрія карти: розмір полотна й екранні точки локацій.
   function geom() {
+    if (mapMode === "art") {
+      return { w: mapArt.w, h: mapArt.h, point: (id) => mapArt.points[id], labelPos: {}, trail: [] };
+    }
     if (use3D) {
       const [w, h] = map3d.size();
       return {
@@ -205,7 +219,7 @@
 
   function drawMap() {
     const states = locStates();
-    if (use3D) return states; // 3D-карта анімує себе сама (requestAnimationFrame)
+    if (mapMode !== "flat") return states; // ілюстрація статична, 3D-карта анімує себе сама
     Art.renderMap($("#map-canvas"), states, frame, Game.WORLD_ID);
     return states;
   }
@@ -213,20 +227,33 @@
   function renderMap() {
     $("#map-title").textContent = Game.meta.name;
     $("#map-subtitle").innerHTML = UI.esc(Game.meta.tech) + ". Виконуй місії.<br>Відновлюй цей світ.";
-    $("#map-canvas").setAttribute("aria-label", (use3D ? "Тривимірна" : "Піксельна") + " карта світу «" + Game.meta.name + "»");
+    const isArt = mapMode === "art";
+    const artEl = $("#map-art");
+    artEl.hidden = !isArt;
+    $("#map-canvas").hidden = isArt;
+    $("#map-stage").classList.toggle("is-art", isArt);
+    if (isArt) {
+      if (artEl.getAttribute("src") !== mapArt.src) artEl.src = mapArt.src;
+      artEl.alt = "Ілюстрована карта світу «" + Game.meta.name + "»";
+    } else {
+      $("#map-canvas").setAttribute("aria-label", (use3D ? "Тривимірна" : "Піксельна") + " карта світу «" + Game.meta.name + "»");
+    }
     const states = drawMap();
-    let current;
+    let current = LOCATIONS.find((loc) => states[loc.id].status === "current") || LOCATIONS[LOCATIONS.length - 1];
+    if (map3d && !use3D) map3d.stop();
     if (use3D) {
       if (!map3d) map3d = Map3D.create({ canvas: $("#map-canvas"), worldId: Game.WORLD_ID });
-      current = LOCATIONS.find((loc) => states[loc.id].status === "current") || LOCATIONS[LOCATIONS.length - 1];
       map3d.update(states, Game.currentLevelId(progress) ? current.id : null);
       map3d.start();
       $("#map-hero").hidden = true;
-      $("#map-tools").hidden = false;
+    } else if (isArt) {
+      // Герой уже намальований на ілюстрації; поточну локацію показує підпис «Ти тут».
+      $("#map-hero").hidden = true;
     } else {
+      $("#map-hero").hidden = false;
       current = placeHero(states);
-      $("#map-tools").hidden = true;
     }
+    syncMapTools();
     const G = geom();
     $("#map-stage").style.aspectRatio = G.w + " / " + G.h;
     applyZoom();
@@ -255,7 +282,7 @@
   // повна назва — у поточної локації, при наведенні/фокусі або коли карту наближено.
   function watchCompact() {
     const stage = $("#map-stage");
-    const update = () => stage.classList.toggle("is-compact", use3D && stage.clientWidth < 1100);
+    const update = () => stage.classList.toggle("is-compact", mapMode !== "flat" && stage.clientWidth < 1100);
     if (window.ResizeObserver) new ResizeObserver(update).observe(stage);
     update();
   }
@@ -268,13 +295,44 @@
     btn.innerHTML = off ? "&#9654;" : "&#10074;&#10074;";
   }
 
+  // Які кнопки доступні в поточному режимі: обертання й пауза — лише для 3D,
+  // перемикач — коли у світу є і ілюстрація, і 3D.
+  function syncMapTools() {
+    const tools = $("#map-tools");
+    const canSwitch = !!mapArt && has3D;
+    tools.hidden = mapMode === "flat" && !canSwitch;
+    ["rotate-left", "rotate-right", "motion"].forEach((t) => { tools.querySelector('[data-tool="' + t + '"]').hidden = !use3D; });
+    const modeBtn = tools.querySelector('[data-tool="mode"]');
+    modeBtn.hidden = !canSwitch;
+    if (canSwitch) {
+      const toArt = mapMode === "3d";
+      modeBtn.innerHTML = toArt ? UI.icon("map") : "3D";
+      modeBtn.setAttribute("aria-label", toArt ? "Показати намальовану карту" : "Показати 3D-карту");
+      modeBtn.title = toArt ? "Намальована карта" : "3D-карта";
+    }
+  }
+
+  function setMapMode(mode) {
+    mapMode = mode;
+    use3D = mode === "3d";
+    try { localStorage.setItem(MODE_KEY, mode); } catch (e) { /* ignore */ }
+    zoom = 1;
+    renderMap();
+    $("#map-stage").classList.toggle("is-compact", mapMode !== "flat" && $("#map-stage").clientWidth < 1100);
+  }
+
   function setupMapTools() {
     watchCompact();
     syncMotionButton();
     $("#map-tools").addEventListener("click", (event) => {
       const btn = event.target.closest("[data-tool]");
-      if (!btn || !map3d) return;
+      if (!btn) return;
       const tool = btn.dataset.tool;
+      if (tool === "mode") {
+        setMapMode(mapMode === "art" ? "3d" : "art");
+        return;
+      }
+      if (tool !== "zoom-in" && tool !== "zoom-out" && !map3d) return;
       if (tool === "motion") {
         const on = UI.motion() === "off";
         UI.setMotion(on);
