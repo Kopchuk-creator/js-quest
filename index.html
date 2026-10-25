@@ -4,14 +4,87 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>JS Quest — карта світу</title>
+  <meta name="description" content="Пригодницька гра-тренажер JavaScript: 96 рівнів, 11 локацій, піксельний світ.">
+  <meta name="theme-color" content="#121314">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Manrope:wght@500;600;700;800&display=swap">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23f7d23a'/><text x='8' y='12' font-size='9' font-family='monospace' font-weight='bold' text-anchor='middle' fill='%23121314'>{}</text></svg>">
 </head>
 <body data-page="map">
-  <main id="app"></main>
+  <a class="skip-link" href="#main">Перейти до вмісту</a>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar"></aside>
+
+    <main class="main" id="main" tabindex="-1">
+      <!-- Карта -->
+      <section class="view" id="view-map" aria-labelledby="map-title">
+        <header class="topbar">
+          <div class="topbar-title">
+            <h1 id="map-title">Твоя пригода</h1>
+            <p class="subtitle">Вивчай JavaScript. Виконуй місії.<br>Відкривай нові землі.</p>
+          </div>
+          <div class="xp-card" id="xp-card"></div>
+        </header>
+
+        <div class="map-layout">
+          <section class="card map-card" aria-label="Карта світу">
+            <div class="map-scroll" id="map-scroll">
+              <div class="map-stage" id="map-stage">
+                <canvas class="pixel map-canvas" id="map-canvas" role="img" aria-label="Піксельна карта королівства з одинадцятьма локаціями"></canvas>
+                <svg class="map-path" id="map-path" viewBox="0 0 400 250" preserveAspectRatio="none" aria-hidden="true"></svg>
+                <div class="map-hero" id="map-hero" aria-hidden="true"></div>
+                <div class="map-labels" id="map-labels"></div>
+              </div>
+            </div>
+            <div class="location-panel" id="location-panel" hidden></div>
+          </section>
+
+          <section class="card mission-card" id="mission-card" aria-labelledby="mission-title"></section>
+        </div>
+
+        <section class="card inventory" aria-labelledby="inv-title">
+          <div class="inventory-intro">
+            <h2 id="inv-title">Інвентар героя</h2>
+            <p>Корисні речі, здобуті в подорожі.</p>
+          </div>
+          <ul class="inventory-slots" id="inventory-slots"></ul>
+          <p class="parchment">Збирай трофеї, щоб відкривати нові можливості!</p>
+        </section>
+      </section>
+
+      <!-- Проєкти -->
+      <section class="view" id="view-projects" aria-labelledby="projects-title" hidden>
+        <header class="topbar">
+          <div class="topbar-title">
+            <h1 id="projects-title">Проєкти</h1>
+            <p class="subtitle">Великі практичні місії та журнал<br>усіх локацій з рівнями.</p>
+          </div>
+        </header>
+        <div class="projects-grid" id="projects-grid"></div>
+        <h2 class="section-title">Журнал локацій</h2>
+        <div class="journal" id="journal"></div>
+      </section>
+
+      <!-- Трофеї / профіль героя -->
+      <section class="view" id="view-trophies" aria-labelledby="trophies-title" hidden>
+        <header class="topbar">
+          <div class="topbar-title">
+            <h1 id="trophies-title">Профіль героя</h1>
+            <p class="subtitle">Твій шлях, досвід і трофеї<br>за відновлені землі.</p>
+          </div>
+        </header>
+        <div class="profile" id="profile"></div>
+      </section>
+    </main>
+  </div>
+
   <script src="js/storage.js"></script>
   <script src="js/levels.js"></script>
   <script src="js/game.js"></script>
   <script src="js/art.js"></script>
+  <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
