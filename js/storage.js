@@ -28,6 +28,7 @@
       bestStreak: 0,
       fails: {},           // { [id]: кількість невдалих спроб } — лише для статистики, без штрафів
       celebrated: [],      // id локацій, для яких уже показали анімацію трофея
+      variations: [],      // id рівнів, де пройдено «Зміну умови» з перевірки розуміння
     };
   }
 
@@ -86,6 +87,9 @@
       const merged = Object.assign(emptyProgress(), data);
       merged.completed = Array.isArray(merged.completed)
         ? merged.completed.filter((n) => Number.isInteger(n))
+        : [];
+      merged.variations = Array.isArray(merged.variations)
+        ? merged.variations.filter((n) => Number.isInteger(n))
         : [];
       return merged;
     } catch (e) {

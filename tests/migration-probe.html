@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <title>Кодомандри — перевірка міграції чернеток</title>
+  <script src="../js/storage.js"></script>
+  <script src="../js/worlds.js"></script>
+  <script src="../js/levels.js"></script>
+  <script src="../js/levels-web.js"></script>
+  <script src="../js/game.js"></script>
+</head>
+<body>
+  <script>
+    // Сторінка лише завантажує game.js (там міграція) і повідомляє, що лишилось у сховищі.
+    const read = (key) => { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } };
+    parent.postMessage({ migrationProbe: { progress: read("js-game-progress"), drafts: read("js-game-drafts") } }, "*");
+  </script>
+</body>
+</html>

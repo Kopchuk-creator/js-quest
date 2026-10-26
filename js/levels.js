@@ -646,6 +646,7 @@ switch (mode) {
     testCases: [
       { name: "Одруківка «lern»", inputs: { mode: "lern" }, check: jsqLogs(["Невідомий режим: lern"]) },
       { name: "Порожній рядок", inputs: { mode: "" }, check: jsqLogs(["Невідомий режим: "]) },
+      { name: "Відомий режим learn", inputs: { mode: "learn" }, check: jsqLogs(["Читай теорію й приклад"]) },
       { name: "Відомий режим practice", inputs: { mode: "practice" }, check: jsqLogs(["Пиши код сам"]) },
       { name: "Відомий режим review", inputs: { mode: "review" }, check: jsqLogs(["Повтори вчорашнє"]) },
     ],
@@ -797,6 +798,7 @@ let studyDays = 0;
     testCases: [
       { name: "14 днів → 10 навчальних", inputs: { daysTotal: 14 }, check(ctx) { const exp = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12].map((d) => "День " + d); const s = jsqVal(ctx, "studyDays"); return { pass: ctx.equal(ctx.logs, exp) && s === 10, actual: ctx.show(ctx.logs) + ", studyDays = " + ctx.show(s), expected: ctx.show(exp) + ", studyDays = 10" }; } },
       { name: "7 днів → 5 навчальних", inputs: { daysTotal: 7 }, check(ctx) { const s = jsqVal(ctx, "studyDays"); return { pass: ctx.logs.length === 5 && s === 5, actual: ctx.show(ctx.logs) + ", " + ctx.show(s), expected: "5 рядків, 5" }; } },
+      { name: "12 днів → останній день теж навчальний", inputs: { daysTotal: 12 }, check(ctx) { const s = jsqVal(ctx, "studyDays"); const last = ctx.logs[ctx.logs.length - 1]; return { pass: s === 10 && last === "День 12", actual: ctx.show(s) + ", останній рядок " + ctx.show(last), expected: "10, останній рядок \"День 12\"" }; } },
     ],
     codeChecks: [{ re: /\bcontinue\b/, label: "Використано `continue`" }],
     solution: `// daysTotal задає перевірка
@@ -942,6 +944,7 @@ const buildMessage = (minutes, goal) => {
       { name: "hoursToMinutes(1.5) → 90", fn: "hoursToMinutes", input: [1.5], expectedOutput: 90 },
       { name: "buildMessage(45, 40) → «Ціль досягнута»", fn: "buildMessage", input: [45, 40], expectedOutput: "Ціль досягнута" },
       { name: "buildMessage(25, 40) → «Ще 15 хв»", fn: "buildMessage", input: [25, 40], expectedOutput: "Ще 15 хв" },
+      { name: "buildMessage(40, 40) → «Ціль досягнута» (рівно на межі)", fn: "buildMessage", input: [40, 40], expectedOutput: "Ціль досягнута" },
     ],
     codeChecks: [{ re: /=>/, label: "Стрілкові функції збережено" }],
     solution: `const hoursToMinutes = (hours) => hours * 60;
@@ -1062,6 +1065,7 @@ for (let i = 0; i <= topics.length; i++) {
           return { pass: vars.pass && logsOk, actual: vars.actual + "; вивід " + ctx.show(ctx.logs), expected: vars.expected + "; п'ять рядків з темами" };
         },
       },
+      { name: "Одна тема", inputs: { topics: ["DOM"] }, check: jsqVars({ firstTopic: "DOM", lastTopic: "DOM", topicsCount: 1, hasTopics: true }) },
       {
         name: "Порожній список",
         inputs: { topics: [] },
@@ -1413,6 +1417,8 @@ const isInRange = (m) => m >= 5 && m <= 120;
     testCases: [
       { name: "[30, 90, 10, 75]", inputs: { durations: [30, 90, 10, 75] }, check: jsqVars({ firstLong: 90, hasShort: true, allInRange: true }) },
       { name: "[20, 130]", inputs: { durations: [20, 130] }, check: jsqVars({ firstLong: 130, hasShort: false, allInRange: false }) },
+      { name: "Межі: [15, 59, 60, 120]", inputs: { durations: [15, 59, 60, 120] }, check: jsqVars({ firstLong: 60, hasShort: false, allInRange: true }) },
+      { name: "Межі: [5, 14]", inputs: { durations: [5, 14] }, check: jsqVars({ firstLong: undefined, hasShort: true, allInRange: true }) },
       { name: "[] — порожній", inputs: { durations: [] }, check: jsqVars({ firstLong: undefined, hasShort: false, allInRange: true }) },
     ],
     codeChecks: [{ re: /\.find\(/, label: "`find`" }, { re: /\.some\(/, label: "`some`" }, { re: /\.every\(/, label: "`every`" }],
@@ -2449,6 +2455,7 @@ form.addEventListener("submit", (event) => {
 });`,
     testCases: [
       { name: "Відправлення показує підсумок", check(ctx) { ctx.$("#task-title").value = "Масиви"; ctx.$("#task-minutes").value = "30"; ctx.fire(ctx.$("#task-form"), "submit"); const s = jsqText(ctx, "#summary"); return { pass: s === "Додано: Масиви (30 хв)", actual: ctx.show(s), expected: "\"Додано: Масиви (30 хв)\"" }; } },
+      { name: "Сторінка не перезавантажується", check(ctx) { ctx.$("#task-title").value = "Масиви"; ctx.$("#task-minutes").value = "30"; const e = ctx.fire(ctx.$("#task-form"), "submit"); return { pass: e.defaultPrevented, actual: e.defaultPrevented ? "стандартну дію скасовано" : "форма перезавантажила б сторінку", expected: "event.preventDefault() у обробнику" }; } },
       { name: "Дані читаються в момент відправлення", check(ctx) { const f = ctx.$("#task-form"); ctx.$("#task-title").value = "Масиви"; ctx.$("#task-minutes").value = "30"; ctx.fire(f, "submit"); ctx.$("#task-title").value = "DOM"; ctx.$("#task-minutes").value = "45"; ctx.fire(f, "submit"); const s = jsqText(ctx, "#summary"); return { pass: s === "Додано: DOM (45 хв)", actual: ctx.show(s), expected: "\"Додано: DOM (45 хв)\"" }; } },
     ],
     solution: `const form = document.querySelector("#task-form");
@@ -2962,6 +2969,7 @@ form.addEventListener("submit", (event) => {
       { name: "Порожня назва → помилка, нічого не додано", check(ctx) { ctx.$("#task-title").value = ""; ctx.fire(ctx.$("#task-form"), "submit"); const e = jsqText(ctx, "#title-error"); const n = ctx.get("tasks").length; return { pass: e === "Введи назву завдання" && n === 0, actual: ctx.show(e) + ", записів " + n, expected: "\"Введи назву завдання\", записів 0" }; } },
       { name: "Самі пробіли → помилка, введене не стерто", check(ctx) { ctx.$("#task-title").value = "   "; ctx.fire(ctx.$("#task-form"), "submit"); const e = jsqText(ctx, "#title-error"); const v = ctx.$("#task-title").value; return { pass: e === "Введи назву завдання" && v === "   " && ctx.get("tasks").length === 0, actual: ctx.show([e, v]), expected: "[\"Введи назву завдання\", \"   \"]" }; } },
       { name: "Виправлено → додано, помилку прибрано", check(ctx) { const f = ctx.$("#task-form"); ctx.$("#task-title").value = ""; ctx.fire(f, "submit"); ctx.$("#task-title").value = "  Масиви "; ctx.fire(f, "submit"); const t = ctx.get("tasks"); const e = jsqText(ctx, "#title-error"); return { pass: t.length === 1 && t[0].title === "Масиви" && e === "", actual: ctx.show(t) + ", помилка " + ctx.show(e), expected: "[{ id: 1, title: \"Масиви\", done: false }], помилка \"\"" }; } },
+      { name: "Два завдання → id 1 і 2, сторінка не перезавантажується", check(ctx) { const f = ctx.$("#task-form"); ctx.$("#task-title").value = "Масиви"; ctx.fire(f, "submit"); ctx.$("#task-title").value = "DOM"; const e = ctx.fire(f, "submit"); const t = ctx.get("tasks"); const exp = [{ id: 1, title: "Масиви", done: false }, { id: 2, title: "DOM", done: false }]; return { pass: ctx.equal(t, exp) && e.defaultPrevented, actual: ctx.show(t) + (e.defaultPrevented ? "" : ", без preventDefault"), expected: ctx.show(exp) }; } },
     ],
     codeChecks: [{ re: /\.trim\(\)/, label: "Пробіли прибрано через `trim()`" }],
     solution: `const tasks = [];
@@ -2996,7 +3004,7 @@ else if (!Number.isFinite(age) || age < 1) ageError.textContent = "Некоре�
     worldEvent: "Відбудовано міст через прірву!",
     taskType: "write-function",
     prompt: "Обробник форми перевіряє два поля. Назва обов'язкова: інакше в `#title-error` `Введи назву завдання`. Тривалість обов'язкова: порожнє поле → `Вкажи тривалість` у `#minutes-error`; поза межами 1–180 (або не скінченне число) → `Тривалість — від 1 до 180 хв`. Завдання `{ id, title, minutes, done: false }` додається лише коли обидва поля правильні; тоді помилки очищуються.",
-    criteria: "перевірено межі 1 і 180, вихід за них, порожні поля й правильний запис; повідомлення конкретні.",
+    criteria: "перевірено порожню назву, назву з пробілів, порожню тривалість, -5, 0, 1, 180 і 181; некоректна форма не змінює список; повідомлення конкретні.",
     exports: ["tasks"],
     fileName: "validate.js",
     html: `<form id="task-form">
@@ -3016,6 +3024,19 @@ const minutesError = document.querySelector("#minutes-error");
 `,
     testCases: [
       { name: "Обидва поля порожні → дві помилки", check(ctx) { ctx.fire(ctx.$("#task-form"), "submit"); const a = jsqText(ctx, "#title-error"), b = jsqText(ctx, "#minutes-error"); return { pass: a === "Введи назву завдання" && b === "Вкажи тривалість" && ctx.get("tasks").length === 0, actual: ctx.show([a, b]), expected: "[\"Введи назву завдання\", \"Вкажи тривалість\"]" }; } },
+      { name: "Назва з самих пробілів → помилка", check(ctx) { ctx.$("#task-title").value = "   "; ctx.$("#task-minutes").value = "30"; ctx.fire(ctx.$("#task-form"), "submit"); const a = jsqText(ctx, "#title-error"), b = jsqText(ctx, "#minutes-error"); return { pass: a === "Введи назву завдання" && b === "" && ctx.get("tasks").length === 0, actual: ctx.show([a, b]) + ", записів " + ctx.get("tasks").length, expected: "[\"Введи назву завдання\", \"\"], записів 0" }; } },
+      {
+        name: "Некоректна форма не змінює вже заповнений список",
+        check(ctx) {
+          const f = ctx.$("#task-form");
+          ctx.$("#task-title").value = "Масиви"; ctx.$("#task-minutes").value = "30"; ctx.fire(f, "submit");
+          const bad = [["", "30"], ["   ", "30"], ["DOM", ""], ["DOM", "-5"], ["DOM", "0"], ["DOM", "181"]];
+          bad.forEach(([t, m]) => { ctx.$("#task-title").value = t; ctx.$("#task-minutes").value = m; ctx.fire(f, "submit"); });
+          const tasks = ctx.get("tasks");
+          const exp = [{ id: 1, title: "Масиви", minutes: 30, done: false }];
+          return { pass: ctx.equal(tasks, exp), actual: ctx.show(tasks), expected: ctx.show(exp) };
+        },
+      },
       {
         name: "0, 181 і -5 — поза межами",
         check(ctx) {
@@ -3031,10 +3052,10 @@ const minutesError = document.querySelector("#minutes-error");
           const f = ctx.$("#task-form");
           ctx.$("#task-title").value = ""; ctx.$("#task-minutes").value = ""; ctx.fire(f, "submit");
           ctx.$("#task-title").value = "Масиви"; ctx.$("#task-minutes").value = "1"; ctx.fire(f, "submit");
-          ctx.$("#task-title").value = "DOM"; ctx.$("#task-minutes").value = "180"; ctx.fire(f, "submit");
+          ctx.$("#task-title").value = "DOM"; ctx.$("#task-minutes").value = "180"; const e = ctx.fire(f, "submit");
           const t = ctx.get("tasks");
-          const ok = t.length === 2 && t[0].minutes === 1 && t[1].minutes === 180 && t[1].id === 2 && jsqText(ctx, "#title-error") === "" && jsqText(ctx, "#minutes-error") === "";
-          return { pass: ok, actual: ctx.show(t), expected: "два записи з minutes 1 і 180, помилки порожні" };
+          const ok = t.length === 2 && t[0].minutes === 1 && t[1].minutes === 180 && t[1].id === 2 && jsqText(ctx, "#title-error") === "" && jsqText(ctx, "#minutes-error") === "" && e.defaultPrevented;
+          return { pass: ok, actual: ctx.show(t) + (e.defaultPrevented ? "" : ", без preventDefault"), expected: "два записи з minutes 1 і 180, помилки порожні, сторінка не перезавантажується" };
         },
       },
     ],
@@ -3315,6 +3336,26 @@ renderTasks();`,
           ctx.get("addTask")("Події", 20);
           const ids = ctx.$$(".task-card").map((c) => c.dataset.id);
           return { pass: ctx.equal(ids, ["1", "2", "3"]), actual: ctx.show(ids), expected: "[\"1\", \"2\", \"3\"]" };
+        },
+      },
+      {
+        name: "Кожна дія одразу видна на сторінці й одразу збережена",
+        check(ctx) {
+          const cards = () => ctx.$$(".task-card").map((c) => c.textContent + (c.classList.contains("is-done") ? " ✓" : ""));
+          ctx.get("addTask")("Масиви", 30);
+          ctx.get("addTask")("DOM", 45);
+          ctx.reload();
+          ctx.get("toggleTask")(1);
+          const toggled = cards();
+          ctx.reload();
+          const toggledSaved = cards();
+          ctx.get("deleteTask")(2);
+          const deleted = cards();
+          ctx.reload();
+          const deletedSaved = cards();
+          const got = [toggled, toggledSaved, deleted, deletedSaved];
+          const exp = [["Масиви ✓", "DOM"], ["Масиви ✓", "DOM"], ["Масиви ✓"], ["Масиви ✓"]];
+          return { pass: ctx.equal(got, exp), actual: ctx.show(got), expected: ctx.show(exp) };
         },
       },
       { name: "Збережені дані не затираються під час запуску", storage: { tasks: "[{\"id\":5,\"title\":\"Старе\",\"minutes\":30,\"done\":false}]" }, check(ctx) { const cards = ctx.$$(".task-card").map((c) => c.textContent); const raw = ctx.storage.getItem("tasks"); return { pass: ctx.equal(cards, ["Старе"]) && raw.includes("Старе"), actual: ctx.show(cards), expected: "[\"Старе\"]" }; } },
@@ -3965,8 +4006,8 @@ quotes.forEach((q) => console.log(q.text));`,
     missionStory: "Вежу Async майже підкорено! Лишилось отримати з сервера приклади завдань і повісити їх на окрему дошку.",
     worldEvent: "Підкорено вежу, приборкано час!",
     taskType: "write-function",
-    prompt: "Допиши `loadExamples()`: після готової перевірки статусу прочитай масив через `response.json()` і покажи назви в `#examples` (кожна — `li`). Якщо масив порожній — напиши в `#examples-status` `Прикладів поки немає`. Свій список `#task-list` не чіпай.",
-    criteria: "показано отримані значення, використано очікування читання; власний список не перезаписано; перевірено порожній і непорожній масиви.",
+    prompt: "Допиши `loadExamples()`: після готової перевірки статусу прочитай масив через `response.json()` і покажи назви в `#examples` (кожна — `li`). Якщо масив порожній — напиши в `#examples-status` `Прикладів поки немає`. Свій список `#task-list` не чіпай. Повторне завантаження не дублює пункти.",
+    criteria: "показано отримані значення, використано очікування читання; власний список не перезаписано; повторне завантаження не дублює пункти; перевірено порожній і непорожній масиви.",
     functionName: "loadExamples",
     fileName: "examples.js",
     html: `<ul id="task-list"><li>Моє: Масиви</li><li>Моє: DOM</li></ul>
@@ -3985,6 +4026,7 @@ quotes.forEach((q) => console.log(q.text));`,
     testCases: [
       { name: "Два приклади", fetch: { data: [{ id: 1, title: "Повторити цикли" }, { id: 2, title: "Пройти DOM" }] }, async check(ctx) { await ctx.fn(); const items = ctx.$$("#examples li").map((li) => li.textContent); return { pass: ctx.equal(items, ["Повторити цикли", "Пройти DOM"]), actual: ctx.show(items), expected: "[\"Повторити цикли\", \"Пройти DOM\"]" }; } },
       { name: "Порожній масив → повідомлення", fetch: { data: [] }, async check(ctx) { await ctx.fn(); const s = jsqText(ctx, "#examples-status"); return { pass: s === "Прикладів поки немає" && ctx.$$("#examples li").length === 0, actual: ctx.show(s), expected: "\"Прикладів поки немає\"" }; } },
+      { name: "Повторне завантаження не дублює пункти", fetch: { data: [{ id: 1, title: "Повторити цикли" }, { id: 2, title: "Пройти DOM" }] }, async check(ctx) { await ctx.fn(); await ctx.fn(); const items = ctx.$$("#examples li").map((li) => li.textContent); return { pass: ctx.equal(items, ["Повторити цикли", "Пройти DOM"]), actual: ctx.show(items), expected: "[\"Повторити цикли\", \"Пройти DOM\"]" }; } },
       { name: "Власний список не змінився", fetch: { data: [{ id: 1, title: "Повторити цикли" }] }, async check(ctx) { await ctx.fn(); const own = ctx.$$("#task-list li").map((li) => li.textContent); return { pass: ctx.equal(own, ["Моє: Масиви", "Моє: DOM"]), actual: ctx.show(own), expected: "[\"Моє: Масиви\", \"Моє: DOM\"]" }; } },
     ],
     codeChecks: [{ re: /await\s+response\.json\(\)/, label: "`await response.json()`" }],
@@ -4107,6 +4149,7 @@ async function loadExamples() {
 }`,
     testCases: [
       { name: "Успіх", fetch: { data: [{ title: "Повторити цикли" }, { title: "Пройти DOM" }] }, async check(ctx) { const p = ctx.fn(); const during = ctx.$("#load-btn").disabled; await p; const items = ctx.$$("#examples li").length; return { pass: during && !ctx.$("#load-btn").disabled && items === 2 && jsqText(ctx, "#status") === "Готово", actual: "під час: " + during + ", після: " + ctx.$("#load-btn").disabled + ", " + items + " li, " + ctx.show(jsqText(ctx, "#status")), expected: "під час: true, після: false, 2 li, \"Готово\"" }; } },
+      { name: "Повторне завантаження не дублює пункти", fetch: { data: [{ title: "Повторити цикли" }, { title: "Пройти DOM" }] }, async check(ctx) { await ctx.fn(); await ctx.fn(); const n = ctx.$$("#examples li").length; return { pass: n === 2, actual: n + " li", expected: "2 li" }; } },
       { name: "Мережевий збій", fetch: { fail: true }, async check(ctx) { let thrown = false; try { await ctx.fn(); } catch (e) { thrown = true; } return { pass: !thrown && !ctx.$("#load-btn").disabled && jsqText(ctx, "#status") === "Не вдалося завантажити приклади", actual: (thrown ? "помилка вилетіла назовні; " : "") + ctx.show([ctx.$("#load-btn").disabled, jsqText(ctx, "#status")]), expected: "[false, \"Не вдалося завантажити приклади\"]" }; } },
       { name: "Пошкоджений JSON", fetch: { badJson: true }, async check(ctx) { let thrown = false; try { await ctx.fn(); } catch (e) { thrown = true; } return { pass: !thrown && !ctx.$("#load-btn").disabled && jsqText(ctx, "#status") === "Не вдалося завантажити приклади", actual: ctx.show([ctx.$("#load-btn").disabled, jsqText(ctx, "#status")]), expected: "[false, \"Не вдалося завантажити приклади\"]" }; } },
       { name: "Повторна спроба після помилки (404)", fetch: { ok: false, status: 404, data: null }, async check(ctx) { try { await ctx.fn(); await ctx.fn(); } catch (e) { /* має бути оброблено всередині */ } return { pass: !ctx.$("#load-btn").disabled && jsqText(ctx, "#status") === "Не вдалося завантажити приклади", actual: ctx.show([ctx.$("#load-btn").disabled, jsqText(ctx, "#status")]), expected: "[false, \"Не вдалося завантажити приклади\"]" }; } },
@@ -4157,7 +4200,7 @@ async function loadExamples() {
     criteria: "ти розрізняєш 404, пошкоджений JSON і правильний JSON іншої форми.",
     functionName: "loadExamples",
     fileName: "examples.js",
-    html: `<p id="status"></p>
+    html: `<p id="status">Ще не завантажено</p>
 <ul id="examples"></ul>`,
     starterCode: `const statusText = document.querySelector("#status");
 const list = document.querySelector("#examples");
@@ -4184,6 +4227,7 @@ async function loadExamples() {
       { name: "Пошкоджений JSON", fetch: { badJson: true }, async check(ctx) { await ctx.fn(); const s = jsqText(ctx, "#status"); return { pass: s === "Сервер надіслав некоректні дані", actual: ctx.show(s), expected: "\"Сервер надіслав некоректні дані\"" }; } },
       { name: "JSON-об'єкт замість масиву", fetch: { data: { title: "Масиви" } }, async check(ctx) { await ctx.fn(); const s = jsqText(ctx, "#status"); return { pass: s === "Очікували список завдань" && ctx.$$("#examples li").length === 0, actual: ctx.show(s), expected: "\"Очікували список завдань\"" }; } },
       { name: "Правильний масив", fetch: { data: [{ title: "Повторити цикли" }] }, async check(ctx) { await ctx.fn(); const s = jsqText(ctx, "#status"); const n = ctx.$$("#examples li").length; return { pass: s === "" && n === 1, actual: ctx.show(s) + ", " + n + " li", expected: "\"\", 1 li" }; } },
+      { name: "Повторне завантаження не дублює пункти", fetch: { data: [{ title: "Повторити цикли" }] }, async check(ctx) { await ctx.fn(); await ctx.fn(); const n = ctx.$$("#examples li").length; return { pass: n === 1, actual: n + " li", expected: "1 li" }; } },
     ],
     codeChecks: [{ re: /throw\s+new\s+Error\(/, label: "`throw new Error(...)`" }, { re: /Array\.isArray\(/, label: "Перевірка `Array.isArray`" }],
     solution: `const statusText = document.querySelector("#status");
@@ -4326,10 +4370,10 @@ export function loadTasks() {
 const MAX_MINUTES = 180;
 // ...
 if (minutes > MAX_MINUTES) { /* помилка з \${MAX_MINUTES} у тексті */ }`,
-    missionStory: "Тронна зала Замку фіналу. Король приймає твій навчальний трекер і просить дві зміни: заняття бувають до чотирьох годин, а підсумок має читатися інакше.",
+    missionStory: "Тронна зала Замку фіналу. Король приймає твій навчальний трекер і просить одну зміну: заняття бувають до чотирьох годин.",
     worldEvent: "Відбудовано замок — королівство врятоване!",
     taskType: "fix-code",
-    prompt: "Трекер уже зібраний з усіх попередніх частин. Внеси дві зміни вимог: 1) максимальна тривалість — **240** хв замість 180 (і в перевірці, і в повідомленні `Тривалість — від 1 до 240 хв`); 2) підсумок у `#summary` — `Усього: N завд. · M хв`. Після змін трекер має пройти всі сценарії приймання.",
+    prompt: "Трекер уже зібраний з усіх попередніх частин. Обов'язкова зміна вимоги: максимальна тривалість — **240** хв замість 180 (і в перевірці, і в повідомленні `Тривалість — від 1 до 240 хв`). Після зміни трекер має пройти всі сценарії приймання. Друга зміна — формат підсумку — додаткова: вона в блоці «Зміна умови» після проходження.",
     criteria: "усі сценарії приймання виконано: перший запуск, неправильна форма, додавання двох записів, виконання одного, видалення іншого, перезавантаження, успішне й невдале завантаження прикладів; власні записи не губляться.",
     exports: ["tasks"],
     fileName: "tracker.js",
@@ -4473,7 +4517,7 @@ loadButton.addEventListener("click", loadExamples);
 
 renderTasks();`,
     testCases: [
-      { name: "Перший запуск без записів", check(ctx) { const s = jsqText(ctx, "#summary"); return { pass: s === "Усього: 0 завд. · 0 хв" && ctx.$$(".task-card").length === 0, actual: ctx.show(s), expected: "\"Усього: 0 завд. · 0 хв\"" }; } },
+      { name: "Перший запуск без записів", check(ctx) { const n = ctx.$$(".task-card").length, t = ctx.get("tasks").length; return { pass: n === 0 && t === 0, actual: n + " карток, " + t + " записів", expected: "0 карток, 0 записів" }; } },
       {
         name: "Неправильна форма не додає записів",
         check(ctx) {
@@ -4487,19 +4531,42 @@ renderTasks();`,
         },
       },
       {
+        name: "Межі: назва з пробілів, -5 і 0 відхилено; 1 і 240 прийнято й одразу збережено",
+        check(ctx) {
+          const f = ctx.$("#task-form");
+          const send = (t, m) => { ctx.$("#task-title").value = t; ctx.$("#task-minutes").value = m; return ctx.fire(f, "submit"); };
+          send("   ", "30"); send("DOM", "-5"); send("DOM", "0");
+          const rejected = ctx.get("tasks").length;
+          send("Масиви", "1");
+          const e = send("DOM", "240");
+          const minutes = ctx.get("tasks").map((t) => t.minutes);
+          const shown = ctx.$$(".task-card").length;
+          const summary = jsqText(ctx, "#summary");
+          const summaryOk = /(^|\D)2(\D|$)/.test(summary) && /(^|\D)241(\D|$)/.test(summary);
+          ctx.reload();
+          const saved = ctx.$$(".task-card").length;
+          const ok = rejected === 0 && ctx.equal(minutes, [1, 240]) && shown === 2 && summaryOk && saved === 2 && e.defaultPrevented;
+          return { pass: ok, actual: ctx.show({ rejected, minutes, shown, summary, saved, preventDefault: e.defaultPrevented }), expected: "відхилено 0 записів, minutes [1, 240], 2 картки, у підсумку 2 і 241 хв, після перезавантаження 2 картки" };
+        },
+      },
+      {
         name: "Два записи, виконання одного, видалення іншого, перезавантаження",
         check(ctx) {
           const f = ctx.$("#task-form");
+          const cards = () => ctx.$$(".task-card").map((c) => c.dataset.id + (c.classList.contains("is-done") ? "✓" : ""));
           ctx.$("#task-title").value = "Масиви"; ctx.$("#task-minutes").value = "200"; ctx.fire(f, "submit");
           ctx.$("#task-title").value = "DOM"; ctx.$("#task-minutes").value = "30"; ctx.fire(f, "submit");
-          const afterAdd = jsqText(ctx, "#summary");
+          const afterAdd = ctx.get("tasks").map((t) => t.minutes);
           ctx.fire(ctx.$('.done-btn[data-id="1"]'), "click");
+          const afterDone = cards();
           ctx.fire(ctx.$('.delete-btn[data-id="2"]'), "click");
+          const afterDelete = cards();
           ctx.reload();
-          const cards = ctx.$$(".task-card").map((c) => c.dataset.id + (c.classList.contains("is-done") ? "✓" : ""));
-          const s = jsqText(ctx, "#summary");
-          const ok = afterAdd === "Усього: 2 завд. · 230 хв" && ctx.equal(cards, ["1✓"]) && s === "Усього: 1 завд. · 200 хв";
-          return { pass: ok, actual: ctx.show([afterAdd, cards, s]), expected: "[\"Усього: 2 завд. · 230 хв\", [\"1✓\"], \"Усього: 1 завд. · 200 хв\"]" };
+          const afterReload = cards();
+          const left = ctx.get("tasks").map((t) => t.title + (t.done ? " ✓" : ""));
+          const got = [afterAdd, afterDone, afterDelete, afterReload, left];
+          const exp = [[200, 30], ["1✓", "2"], ["1✓"], ["1✓"], ["Масиви ✓"]];
+          return { pass: ctx.equal(got, exp), actual: ctx.show(got), expected: ctx.show(exp) };
         },
       },
       {
@@ -4509,9 +4576,12 @@ renderTasks();`,
         async check(ctx) {
           ctx.fire(ctx.$("#load-examples"), "click");
           await ctx.sleep(80);
+          ctx.fire(ctx.$("#load-examples"), "click");
+          await ctx.sleep(80);
           const ex = ctx.$$("#examples li").map((li) => li.textContent);
           const own = ctx.$$(".task-card").length;
-          return { pass: ctx.equal(ex, ["Повторити цикли", "Пройти DOM"]) && own === 1, actual: ctx.show(ex) + ", власних " + own, expected: "два приклади, власних 1" };
+          const s = jsqText(ctx, "#examples-status");
+          return { pass: ctx.equal(ex, ["Повторити цикли", "Пройти DOM"]) && own === 1 && s !== "Завантаження…", actual: ctx.show(ex) + ", власних " + own + ", статус " + ctx.show(s), expected: "два приклади (повторне завантаження не дублює), власних 1, статус «Завантаження…» прибрано" };
         },
       },
       {
@@ -4576,7 +4646,7 @@ function renderTasks() {
   list.textContent = "";
   list.append(...tasks.map(createTaskElement));
   const minutes = tasks.reduce((sum, task) => sum + task.minutes, 0);
-  document.querySelector("#summary").textContent = \`Усього: \${tasks.length} завд. · \${minutes} хв\`;
+  document.querySelector("#summary").textContent = \`Завдань: \${tasks.length}, хвилин: \${minutes}\`;
 }
 
 /* ---------- форма ---------- */
@@ -4649,7 +4719,7 @@ async function loadExamples() {
 loadButton.addEventListener("click", loadExamples);
 
 renderTasks();`,
-    hint: "Межа вже винесена в константу `MAX_MINUTES` — використай її й у перевірці, й у тексті повідомлення. Підсумок будується в одному місці — у `renderTasks`.",
+    hint: "Межа вже винесена в константу `MAX_MINUTES` — зміни її значення й використай константу і в перевірці, і в тексті повідомлення.",
     difficulty: 3,
   }),
 ];

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Кодомандри — мутаційна перевірка тестів</title>
+  <style>
+    body { background: #111213; color: #f3f2ee; font: 14px/1.5 system-ui, sans-serif; margin: 24px; }
+    h1 { font-size: 22px; } table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+    td, th { border-bottom: 1px solid #2d2e33; padding: 6px 8px; text-align: left; vertical-align: top; }
+    .ok { color: #5ee0a0; } .bad { color: #ff8a76; font-weight: 700; }
+    code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: #a8aab0; white-space: pre-wrap; }
+  </style>
+  <script src="../js/worlds.js"></script>
+  <script src="../js/levels.js"></script>
+  <script src="../js/levels-checks.js"></script>
+  <script src="../js/checker.js"></script>
+</head>
+<body>
+  <h1>Мутаційна перевірка тестів (світ JavaScript)</h1>
+  <p>З еталонного рішення кожного рівня з кодом автоматично створюються «правдоподібно неправильні» варіанти:
+    межа <code>&lt;</code>/<code>&lt;=</code>, <code>===</code>/<code>!==</code>, <code>&amp;&amp;</code>/<code>||</code>, забутий <code>return</code>,
+    прибрані <code>trim()</code>, <code>slice()</code>, <code>Number()</code>, <code>preventDefault()</code>, <code>await</code>, <code>break</code>/<code>continue</code>, заперечення <code>!</code> тощо.
+    Кожен варіант має НЕ пройти автотести. Ті, що вижили, перелічено нижче: це або слабке місце тестів, або рівнозначна заміна.
+    Параметри адреси: <code>?from=1&amp;to=96</code>.</p>
+  <p id="summary">Перевіряю…</p>
+  <table><thead><tr><th>#</th><th>Рівень</th><th>Мутантів</th><th>Вижили</th></tr></thead><tbody id="rows"></tbody></table>
+  <script>
+    // Позиції всередині рядків і коментарів не мутуємо (там текст, а не код).
+    const TOKEN = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)/g;
+    const mask = (code) => code.replace(TOKEN, (m) => m.replace(/[^\n]/g, " "));
+
+    const OPERATORS = [
+      [/<=/g, "<"], [/(?<![<=!])<(?![=<])/g, "<="], [/>=/g, ">"], [/(?<![=>-])>(?![=>])/g, ">="],
+      [/===/g, "!=="], [/!==/g, "==="], [/&&/g, "||"], [/\|\|/g, "&&"],
+      [/\breturn\s+(?=[^;\s}])/g, ""], [/\+ 1\b/g, "+ 2"], [/- 1\b/g, "+ 1"],
+      [/(?<![\w.$])0(?![\w.])/g, "1"],
+      [/\.slice\(\)/g, ""], [/\.trim\(\)/g, ""], [/event\.preventDefault\(\);/g, ""],
+      [/saveTasks\(\);/g, ""], [/renderTasks\(\);/g, ""], [/!(?=[\w(])/g, ""],
+      [/Number\(([^()]*)\)/g, "$1"], [/\bbreak;/g, ""], [/\bcontinue;/g, ""], [/\bawait /g, ""],
+      [/clearTimeout\([^)]*\);/g, ""], [/\.textContent = "";/g, ""],
+    ];
+
+    function mutants(source) {
+      const masked = mask(source);
+      const out = [];
+      OPERATORS.forEach(([re, to]) => {
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(source))) {
+          if (masked[m.index] !== source[m.index]) continue; // всередині рядка чи коментаря
+          const replaced = m[0].replace(new RegExp(re.source), to);
+          const code = source.slice(0, m.index) + replaced + source.slice(m.index + m[0].length);
+          if (code !== source) out.push({ code, label: JSON.stringify(m[0]) + " → " + JSON.stringify(replaced) + " (символ " + m.index + ")" });
+          if (m[0] === "") re.lastIndex++;
+        }
+      });
+      return out;
+    }
+
+    (async () => {
+      const params = new URLSearchParams(location.search);
+      const from = Number(params.get("from") || 1), to = Number(params.get("to") || 96);
+      const levels = window.WORLD_DATA.js.levels.filter((l) => ["write-function", "fix-code"].includes(l.taskType) && l.id >= from && l.id <= to);
+      let total = 0, survived = 0;
+      const rows = document.getElementById("rows");
+      window.__mutants = { done: false, survivors: [] };
+      for (const level of levels) {
+        const list = mutants(level.solution);
+        const alive = [];
+        for (const mutant of list) {
+          const report = await Checker.runCode(level, mutant.code);
+          if (report.pass) alive.push(mutant.label);
+        }
+        total += list.length;
+        survived += alive.length;
+        alive.forEach((label) => window.__mutants.survivors.push(level.id + ": " + label));
+        rows.insertAdjacentHTML("beforeend", "<tr><td>" + level.id + "</td><td>" + level.title + "</td><td>" + list.length + '</td><td class="' + (alive.length ? "bad" : "ok") + '">' +
+          (alive.length ? "<code>" + alive.map((a) => a.replace(/</g, "&lt;")).join("\n") + "</code>" : "0") + "</td></tr>");
+      }
+      document.getElementById("summary").innerHTML = "Рівнів: " + levels.length + ", мутантів: " + total + ', <span class="' + (survived ? "bad" : "ok") + '">вижили: ' + survived + "</span>";
+      window.__mutants.done = true;
+    })();
+  </script>
+</body>
+</html>

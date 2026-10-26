@@ -194,10 +194,115 @@
       '<ul class="checklist" id="checklist" aria-label="Критерії виконання">' + checklistItems().map((it) =>
         '<li class="check-item" data-key="' + it.key + '"><span class="check-box">' + UI.icon("check") + '</span><span>' + UI.md(it.label) + '</span><span class="visually-hidden check-state">не виконано</span></li>'
       ).join("") + "</ul>" +
+      understandingHtml() +
       '<details class="disclosure" id="theory"><summary>' + UI.icon("book") + "Сувій знань" + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><p>' + UI.md(level.concept) + "</p>" +
       (level.example ? '<pre class="code-block">' + UI.highlight(level.example, level.exampleLang || UI.guessLang(level.example, lang)) + "</pre>" : "") + "</div></details>" +
       '<details class="disclosure" id="hint"><summary>' + UI.icon("bulb") + "Підказка" + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><p>' + UI.md(level.hint) + '</p><div id="solution-slot"></div></div></details>'
     );
+  }
+
+  /* Перевірка розуміння: автотести місії, зміна умови (автоперевірка) і
+     запитання, яке перевіряє ментор, — три окремі статуси. */
+  function understandingHtml() {
+    const u = level.understanding;
+    if (!u) return "";
+    const v = u.variation;
+    const status = (key, label, value) =>
+      '<li data-u="' + key + '"><span class="u-mark" aria-hidden="true">' + UI.icon("check") + "</span>" + label + ": <strong>" + value + "</strong></li>";
+    const answer = v.type === "predict"
+      ? codeViewHtml(v.code) + v.expectedAnswer.map((_, i) =>
+        '<div class="answer-line" data-vline="' + i + '"><label for="vout-' + i + '">Рядок ' + (i + 1) + '</label><input class="text-input" id="vout-' + i +
+        '" autocomplete="off" spellcheck="false" placeholder="вивід console.log"><span class="mark" aria-hidden="true"></span></div>').join("")
+      : '<p class="u-note">Зміни свій код у редакторі й натисни «Перевірити зміну» — запустяться лише тести зміни.</p>';
+    return (
+      '<section class="understand" id="understand" aria-labelledby="understand-title">' +
+      '<h3 id="understand-title">Перевірка розуміння</h3>' +
+      '<ul class="u-status">' +
+      status("tests", "Автотести місії", "ще ні") +
+      status("variation", "Зміна умови", "ще ні") +
+      status("mentor", "Пояснення", "перевіряє ментор") +
+      "</ul>" +
+      '<div class="u-block"><h4>Запитання <span class="u-tag">перевіряє ментор</span></h4><p>' + UI.md(u.question) + "</p>" +
+      '<p class="u-note">Автоматично не оцінюється: поясни відповідь наставнику своїми словами.</p></div>' +
+      '<div class="u-block"><h4>Зміна умови <span class="u-tag is-auto">автоперевірка</span></h4><p>' + UI.md(v.prompt) + "</p>" + answer +
+      '<div class="u-actions"><button type="button" class="btn btn-ghost btn-sm" id="u-run">' + UI.icon("play") + "Перевірити зміну</button>" +
+      '<span class="u-locked" id="u-locked">Відкриється після проходження автотестів місії.</span></div>' +
+      '<p class="u-feedback" id="u-feedback" aria-live="polite"></p></div>' +
+      "</section>"
+    );
+  }
+
+  function syncUnderstanding() {
+    const box = $("#understand");
+    if (!box) return;
+    const progress = GameStore.load();
+    const testsDone = state.solved || progress.completed.includes(levelId);
+    const variationDone = progress.variations.includes(levelId);
+    const set = (key, done, text) => {
+      const item = box.querySelector('[data-u="' + key + '"]');
+      item.classList.toggle("is-pass", done);
+      item.querySelector("strong").textContent = text;
+    };
+    set("tests", testsDone, testsDone ? "пройдено" : "ще ні");
+    set("variation", variationDone, variationDone ? "виконано" : "ще ні");
+    $("#u-run").disabled = !testsDone;
+    $("#u-locked").hidden = testsDone;
+  }
+
+  async function runVariation() {
+    const u = level.understanding;
+    const v = u.variation;
+    const btn = $("#u-run");
+    if (state.running || btn.disabled) return;
+    state.running = true;
+    btn.disabled = true;
+    let pass = false;
+    let detail = "";
+    try {
+      if (v.type === "predict") {
+        const rows = Array.from(document.querySelectorAll("#understand .answer-line"));
+        const res = Checker.checkPredict(v, rows.map((row) => row.querySelector("input").value));
+        res.lines.forEach((l, i) => {
+          rows[i].classList.toggle("is-right", l.pass);
+          rows[i].classList.toggle("is-wrong", !l.pass);
+          rows[i].querySelector(".mark").innerHTML = l.pass ? UI.icon("check") : UI.icon("close");
+        });
+        renderConsole([consoleLine("log", "Зміна умови")].concat(res.lines.map((l, i) =>
+          consoleLine(l.pass ? "pass" : "fail", "Рядок " + (i + 1) + ": " + (l.filled ? l.given : "(порожньо)")))));
+        pass = res.pass;
+        const wrong = res.lines.filter((l) => !l.pass).length;
+        detail = wrong === 1 ? "Один рядок не збігся." : "Не збіглося рядків: " + wrong + ".";
+      } else {
+        renderConsole([consoleLine("log", "Перевіряю зміну умови…")]);
+        const report = await Checker.runCode(window.jsqVariationLevel(level), values.js);
+        renderConsole([consoleLine("log", "Зміна умови")].concat(reportLines(report)));
+        pass = report.pass;
+        const failedTest = report.results.find((r) => !r.pass);
+        const failedCheck = report.codeChecks.find((c) => !c.pass);
+        if (report.error) detail = report.error.hint || report.error.title;
+        else if (failedTest) detail = "Тест «" + failedTest.name + "» не пройшов.";
+        else if (failedCheck) detail = "Бракує вимоги: «" + failedCheck.label + "».";
+      }
+    } catch (e) {
+      renderConsole([consoleLine("fail", "Несподіваний збій перевірки: " + e.message)]);
+    } finally {
+      state.running = false;
+      btn.disabled = false;
+    }
+    const feedback = $("#u-feedback");
+    feedback.className = "u-feedback " + (pass ? "is-pass" : "is-fail");
+    if (pass) {
+      const progress = GameStore.load();
+      if (!progress.variations.includes(levelId)) {
+        progress.variations.push(levelId);
+        GameStore.save(progress);
+      }
+      feedback.textContent = "Зміну умови виконано. Лишилось пояснення — його перевіряє ментор.";
+      setMentor("Зміну умови виконано! А тепер поясни мені своїми словами: " + u.question, "success");
+    } else {
+      feedback.textContent = "Зміна умови ще не працює. " + detail;
+    }
+    syncUnderstanding();
   }
 
   function render() {
@@ -596,9 +701,7 @@
     }
   }
 
-  async function runCodeTask() {
-    renderConsole([consoleLine("log", isMarkup ? "Будую сторінку й перевіряю…" : "Запускаю тести…")]);
-    const report = isMarkup ? await Checker.runMarkup(level, currentSources()) : await Checker.runCode(level, values.js);
+  function reportLines(report) {
     const lines = [];
     report.logs.forEach((l) => lines.push(consoleLine("log", l)));
     if (report.error) lines.push(consoleLine("fail", report.error.title, report.error.hint));
@@ -608,7 +711,13 @@
         : consoleLine("fail", r.name, [r.expected !== undefined ? "очікувалось: " + r.expected : "", r.actual !== undefined ? "отримано: " + r.actual : "", r.message || ""].filter(Boolean).join(" · ")));
     });
     report.codeChecks.forEach((c) => lines.push(consoleLine(c.pass ? "pass" : "fail", c.label)));
-    renderConsole(lines);
+    return lines;
+  }
+
+  async function runCodeTask() {
+    renderConsole([consoleLine("log", isMarkup ? "Будую сторінку й перевіряю…" : "Запускаю тести…")]);
+    const report = isMarkup ? await Checker.runMarkup(level, currentSources()) : await Checker.runCode(level, values.js);
+    renderConsole(reportLines(report));
 
     setCheck("declared", !!report.declared);
     report.codeChecks.forEach((c, i) => setCheck("check" + i, c.pass));
@@ -625,7 +734,7 @@
   }
 
   function runPredict() {
-    const inputs = Array.from(document.querySelectorAll(".answer-line input"));
+    const inputs = Array.from(document.querySelectorAll(".answer-line[data-line] input"));
     const res = Checker.checkPredict(level, inputs.map((i) => i.value));
     const lines = res.lines.map((l, i) => {
       const row = document.querySelector('.answer-line[data-line="' + i + '"]');
@@ -700,7 +809,7 @@
         syncEditor();
         onCodeInput();
       } else if (level.taskType === "predict-output") {
-        document.querySelectorAll(".answer-line input").forEach((input, i) => { input.value = level.expectedAnswer[i]; });
+        document.querySelectorAll(".answer-line[data-line] input").forEach((input, i) => { input.value = level.expectedAnswer[i]; });
       } else if (level.taskType === "multiple-choice") {
         const index = level.options.indexOf(level.expectedAnswer);
         document.querySelectorAll('input[name="choice"]')[index].checked = true;
@@ -729,7 +838,9 @@
       ? "Усі перевірки пройдено. Повторення — мати навчання!"
       : "Усі перевірки пройдено. " + level.worldEvent + (firstTry && outcome.progress.streak > 1 ? " Серія з першої спроби: " + outcome.progress.streak + "!" : "");
     setMentor("Чудово! " + level.worldEvent, "success");
-    setResult("success", outcome.alreadyDone ? "Знову вдалося!" : "Місію виконано!", text);
+    setResult("success", outcome.alreadyDone ? "Знову вдалося!" : "Місію виконано!",
+      text + (level.understanding ? " Далі — «Перевірка розуміння» ліворуч: зміна умови й запитання для ментора." : ""));
+    syncUnderstanding();
     if (sceneArt) celebrateScene();
     else {
       const from = state.sceneProgress;
@@ -803,6 +914,10 @@
 
   $("#run").addEventListener("click", run);
   $("#reset").addEventListener("click", reset);
+  if (level.understanding) {
+    $("#u-run").addEventListener("click", runVariation);
+    syncUnderstanding();
+  }
   // Довідник відкривається на поточній локації — щоб швидко підглянути схожі теми.
   $("#open-handbook").addEventListener("click", () => Handbook.openDrawer({ root: "../", world: Game.WORLD_ID, location: loc.id }));
   $("#console-toggle").addEventListener("click", () => {
@@ -814,7 +929,8 @@
   main.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.matches(".text-input, input[name='choice']")) {
       e.preventDefault();
-      run();
+      if (e.target.closest("#understand")) runVariation();
+      else run();
     }
   });
 

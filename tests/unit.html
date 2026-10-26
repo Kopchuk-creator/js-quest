@@ -12,6 +12,7 @@
   </style>
   <script src="../js/worlds.js"></script>
   <script src="../js/levels.js"></script>
+  <script src="../js/levels-checks.js"></script>
   <script src="../js/levels-web.js"></script>
   <script src="../js/checker.js"></script>
 </head>
@@ -91,6 +92,43 @@
       check("місію зараховано, нараховано XP", s1 && s1.xp > 0 && s1.completedNow.includes(1), JSON.stringify(s1));
       check("після переходу на іншу сторінку прогрес на місці", s2 && s2.completed.includes(1) && s2.xp > 0, JSON.stringify(s2));
       check("друга місія відкрита", s2 && s2.level2Unlocked, JSON.stringify(s2));
+
+      /* ---------- міграція чернеток ---------- */
+      section("Міграція чернеток JS-світу (draftVersion)");
+      const KEYS = ["js-game-progress", "js-game-drafts"];
+      const saved = KEYS.map((k) => localStorage.getItem(k));
+      const probe = () => new Promise((resolve) => {
+        const f = document.createElement("iframe");
+        f.style.display = "none";
+        const onMsg = (e) => {
+          if (!e.data || !e.data.migrationProbe) return;
+          window.removeEventListener("message", onMsg);
+          f.remove();
+          resolve(e.data.migrationProbe);
+        };
+        window.addEventListener("message", onMsg);
+        setTimeout(() => resolve(null), 8000);
+        f.src = "migration-probe.html?r=" + Math.random();
+        document.body.appendChild(f);
+      });
+      const version = WORLD_DATA.js.draftVersion;
+      try {
+        // Гравець зі старої версії: прогрес без draftVersion і стара чернетка.
+        localStorage.setItem("js-game-progress", JSON.stringify({ version: 1, completed: [1, 2], xp: 100, streak: 0, bestStreak: 0, fails: {}, celebrated: [] }));
+        localStorage.setItem("js-game-drafts", JSON.stringify({ 1: "// стара чернетка" }));
+        const first = await probe();
+        check("перше завантаження: старі чернетки видалено", first && first.drafts === null, JSON.stringify(first));
+        check("перше завантаження: пройдене й XP збережено, draftVersion записано",
+          first && first.progress && Checker.deepEqual(first.progress.completed, [1, 2]) && first.progress.xp === 100 && first.progress.draftVersion === version, JSON.stringify(first));
+        // Нове рішення після міграції — друге завантаження його не чіпає.
+        localStorage.setItem("js-game-drafts", JSON.stringify({ 5: "// нове рішення" }));
+        const second = await probe();
+        check("друге завантаження: нова чернетка на місці", second && second.drafts && second.drafts[5] === "// нове рішення", JSON.stringify(second));
+        const third = await probe();
+        check("третє завантаження: нічого не змінилось", third && Checker.deepEqual(third.drafts, { 5: "// нове рішення" }) && third.progress.draftVersion === version, JSON.stringify(third));
+      } finally {
+        KEYS.forEach((k, i) => (saved[i] === null ? localStorage.removeItem(k) : localStorage.setItem(k, saved[i])));
+      }
 
       /* ---------- звіт ---------- */
       const all = groups.flatMap((g) => g.items);

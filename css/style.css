@@ -662,6 +662,29 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .check-item.is-pass .check-box { background: var(--mint); border-color: var(--mint); color: #0d2a1c; }
 .check-item.is-fail .check-box { border-color: var(--coral); }
 
+/* Перевірка розуміння: автотести, зміна умови й пояснення для ментора — окремо */
+.understand { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4); border: 1px solid var(--border-strong); border-radius: var(--r); background: var(--surface-2); }
+.understand h3 { font-size: 16px; font-weight: 800; }
+.understand h4 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); font-size: 14px; font-weight: 700; }
+.u-status { display: flex; flex-direction: column; gap: var(--s2); font-size: 14px; color: var(--text-muted); }
+.u-status li { display: flex; align-items: center; gap: var(--s2); }
+.u-status strong { color: var(--text); font-weight: 700; }
+.u-mark { flex: none; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; border: 2px solid var(--border-strong); color: transparent; }
+.u-mark .icon { width: 12px; height: 12px; stroke-width: 3.2; }
+.u-status li.is-pass .u-mark { background: var(--mint); border-color: var(--mint); color: #0d2a1c; }
+.u-status li[data-u="mentor"] .u-mark { border-style: dashed; border-color: var(--yellow); }
+.u-block { display: flex; flex-direction: column; gap: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--border); font-size: 14px; }
+.u-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; color: var(--yellow); background: var(--yellow-soft); }
+.u-tag.is-auto { color: var(--mint); background: var(--mint-soft); }
+.u-note { font-size: 13px; color: var(--text-dim); }
+.u-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
+.u-locked { font-size: 13px; color: var(--text-dim); }
+.u-feedback:empty { display: none; }
+.u-feedback { font-size: 13px; font-weight: 600; }
+.u-feedback.is-pass { color: var(--mint); }
+.u-feedback.is-fail { color: var(--coral); }
+.understand .editor { font-size: 13px; }
+
 .disclosure { border: 1px solid var(--border-strong); border-radius: var(--r); background: var(--surface-2); }
 .disclosure summary { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) var(--s4); cursor: pointer; font-weight: 600; list-style: none; min-height: 48px; }
 .disclosure summary::-webkit-details-marker { display: none; }

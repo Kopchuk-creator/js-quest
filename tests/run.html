@@ -15,12 +15,13 @@
 </head>
 <body>
   <h1>Автоперевірка рівнів</h1>
-  <p>Для кожного рівня кожного світу: еталонне рішення має пройти перевірку, а стартовий код (там, де він є) — ні. Для predict-output / multiple-choice / fill-blank перевіряється правильна і неправильна відповідь.</p>
+  <p>Для кожного рівня кожного світу: еталонне рішення має пройти перевірку, а стартовий код (там, де він є) — ні. Для predict-output / multiple-choice / fill-blank перевіряється правильна і неправильна відповідь. У світі JS — ще й «Зміна умови»: її еталон проходить тести зміни, а еталон рівня — ні; відповіді predict-змін звірено з реальним виконанням.</p>
   <p id="summary">Перевіряю…</p>
   <div id="worlds"></div>
 
   <script src="../js/worlds.js"></script>
   <script src="../js/levels.js"></script>
+  <script src="../js/levels-checks.js"></script>
   <script src="../js/levels-web.js"></script>
   <script src="../js/checker.js"></script>
   <script>
@@ -35,7 +36,7 @@
 
       for (const [worldId, data] of Object.entries(window.WORLD_DATA)) {
         const section = document.createElement("section");
-        section.innerHTML = "<h2>Світ: " + worldId + " (" + data.levels.length + " рівнів)</h2><table><thead><tr><th>#</th><th>Рівень</th><th>Тип</th><th>Рішення</th><th>Стартовий код / хибна відповідь</th></tr></thead><tbody></tbody></table>";
+        section.innerHTML = "<h2>Світ: " + worldId + " (" + data.levels.length + " рівнів)</h2><table><thead><tr><th>#</th><th>Рівень</th><th>Тип</th><th>Рішення</th><th>Стартовий код / хибна відповідь</th><th>Зміна умови (JS)</th></tr></thead><tbody></tbody></table>";
         host.appendChild(section);
         const rows = section.querySelector("tbody");
         for (const level of data.levels) {
@@ -67,11 +68,31 @@
             okBad = !Checker.checkBlank(level, level.expectedAnswer.map(() => "щось-інше")).pass;
             good = okGood ? "✓" : "✗"; bad = okBad ? "✓" : "✗";
           }
-          if (!okGood || !okBad) failures.push(worldId + ":" + level.id);
+          // Перевірка розуміння (світ JS): запитання є, а зміна умови справді щось вимагає —
+          // її еталон проходить тести зміни, а еталон самого рівня — ні.
+          let okU = true, uText = "—";
+          if (worldId === "js") {
+            const u = level.understanding;
+            if (!u || !u.question || !u.variation || !u.variation.prompt) {
+              okU = false; uText = "✗ немає запитання чи зміни умови";
+            } else if (u.variation.type === "predict") {
+              const run = await Checker.runCode({ taskType: "write-function", testCases: [{ name: "вивід", check: () => ({ pass: true }) }] }, u.variation.code);
+              okU = Checker.checkPredict(u.variation, run.logs).pass && !Checker.checkPredict(u.variation, u.variation.expectedAnswer.map(() => "???")).pass;
+              uText = okU ? "✓ відповідь = реальний вивід" : "✗ консоль: " + run.logs.join(" | ");
+            } else {
+              const vl = jsqVariationLevel(level);
+              const r1 = await Checker.runCode(vl, vl.solution);
+              const r2 = await Checker.runCode(vl, level.solution);
+              okU = r1.pass && !r2.pass;
+              uText = !r1.pass ? "✗ еталон зміни: " + fmt(r1) : r2.pass ? "✗ еталон рівня вже проходить зміну" : "✓ " + r1.results.length + " тестів; старе рішення — ні";
+            }
+          }
+          if (!okGood || !okBad || !okU) failures.push(worldId + ":" + level.id);
           const tr = document.createElement("tr");
           tr.innerHTML = "<td>" + level.id + "</td><td>" + level.title + "</td><td><code>" + level.taskType + "</code></td>" +
             '<td class="' + (okGood ? "ok" : "bad") + '">' + good + "</td>" +
-            '<td class="' + (okBad ? "ok" : "bad") + '">' + bad + "</td>";
+            '<td class="' + (okBad ? "ok" : "bad") + '">' + bad + "</td>" +
+            '<td class="' + (okU ? "ok" : "bad") + '">' + uText + "</td>";
           rows.appendChild(tr);
         }
       }
