@@ -118,6 +118,8 @@
       });
       safeRemove(LAST_WORLD_KEY);
     },
+    // Прибирає лише чернетки коду одного світу.
+    clearDrafts(world) { safeRemove(DRAFTS_KEY + suffix(world)); },
     // Скидає прогрес і чернетки одного світу.
     resetWorld(world) {
       safeRemove(PROGRESS_KEY + suffix(world));

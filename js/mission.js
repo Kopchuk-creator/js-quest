@@ -189,6 +189,7 @@
       "<h2>Твоє завдання</h2>" +
       '<p class="m-story">' + UI.md(level.missionStory) + "</p>" +
       '<p class="m-prompt">' + UI.md(level.prompt) + "</p>" +
+      (level.criteria ? '<p class="m-criteria"><strong>Зараховано, якщо:</strong> ' + UI.md(level.criteria) + "</p>" : "") +
       extra.join("") +
       '<ul class="checklist" id="checklist" aria-label="Критерії виконання">' + checklistItems().map((it) =>
         '<li class="check-item" data-key="' + it.key + '"><span class="check-box">' + UI.icon("check") + '</span><span>' + UI.md(it.label) + '</span><span class="visually-hidden check-state">не виконано</span></li>'

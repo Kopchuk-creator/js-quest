@@ -653,6 +653,8 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .m-task h2 { font-size: 20px; font-weight: 800; }
 .m-story { color: var(--text-muted); font-size: 14px; font-style: italic; }
 .m-prompt { font-size: 15px; }
+.m-criteria { font-size: 14px; color: var(--text-muted); border-left: 3px solid var(--mint); padding: 2px 0 2px var(--s3); }
+.m-criteria strong { color: var(--text); }
 .checklist { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4) 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .check-item { display: flex; gap: var(--s3); align-items: flex-start; font-size: 14px; }
 .check-box { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--yellow); color: transparent; transition: background 0.2s, border-color 0.2s; }

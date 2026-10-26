@@ -223,7 +223,8 @@
             statusText: ok ? "OK" : "Error",
             url: String(url),
             headers: { get: () => "application/json" },
-            json: () => Promise.resolve(clone(cfg.data)),
+            // badJson — сервер відповів, але тіло не є коректним JSON.
+            json: () => (cfg.badJson ? Promise.reject(new SyntaxError("Unexpected token '<', \"<!doctype \"... is not valid JSON")) : Promise.resolve(clone(cfg.data))),
             text: () => Promise.resolve(JSON.stringify(cfg.data)),
           });
         }, 10);
@@ -298,10 +299,15 @@
       run() {
         const win = Object.assign({}, api, { document: sandbox.doc, addEventListener() {}, removeEventListener() {}, location: { reload() {} } });
         const params = ["console", "document", "window", "localStorage", "sessionStorage", "fetch", "setTimeout", "setInterval", "clearTimeout", "clearInterval", "alert", "prompt", "confirm", "__jsqGuard"];
-        const factory = new Function(...params, prepared.body);
+        // testCase.inputs — вхідні дані, які тест підставляє як готові змінні
+        // (так до знайомства з функціями можна перевірити код на різних значеннях).
+        const inputs = testCase.inputs || {};
+        const inputNames = Object.keys(inputs);
+        const factory = new Function(...params, ...inputNames, prepared.body);
         sandbox.resetLoopClock();
         sandbox.exports = factory(api.console, sandbox.doc, win, api.localStorage, api.sessionStorage, api.fetch,
-          api.setTimeout, api.setInterval, api.clearTimeout, api.clearInterval, api.alert, api.prompt, api.confirm, guard) || {};
+          api.setTimeout, api.setInterval, api.clearTimeout, api.clearInterval, api.alert, api.prompt, api.confirm, guard,
+          ...inputNames.map((n) => clone(inputs[n]))) || {};
         return sandbox.exports;
       },
       // «Перезавантаження сторінки»: та сама пам'ять, нова розмітка, код виконується знову.

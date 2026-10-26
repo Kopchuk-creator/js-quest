@@ -200,6 +200,15 @@
     GameStore.save(Object.assign(GameStore.load(worldId), { contentVersion: version }), worldId);
   });
 
+  // Якщо змінилися лише завдання (draftVersion), а теми й номери рівнів ті самі,
+  // пройдене лишається, але старі чернетки коду вже не підходять до нових завдань.
+  Object.keys(window.WORLD_DATA).forEach((worldId) => {
+    const version = window.WORLD_DATA[worldId].draftVersion;
+    if (!version || GameStore.load(worldId).draftVersion === version) return;
+    GameStore.clearDrafts(worldId);
+    GameStore.save(Object.assign(GameStore.load(worldId), { draftVersion: version }), worldId);
+  });
+
   // Поточний світ сторінки.
   const params = new URLSearchParams(location.search);
   let current = params.get("world");
