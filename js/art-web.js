@@ -8,7 +8,7 @@
 (function () {
   "use strict";
 
-  const { painter, gridSprite, hash, fbm, distToPolyline, C } = Art.kit;
+  const { painter, gridSprite, hash, C } = Art.kit;
 
   /* ---------- предмети-трофеї (12×12) ---------- */
 
@@ -202,11 +202,6 @@
     ],
     { k: "#1d4a29", a: "#4aa043", b: "#2f7d3a", t: "#8a5a2e" }
   );
-  const SHRUB = gridSprite(
-    [".kkk.", "kafak", "kaaak", ".kkk."],
-    { k: "#1f4a22", a: "#4aa043", f: "#ff8fc0" }
-  );
-
   // Риштування для недобудованої частини будівлі.
   function scaffold(g, x, y, w, h) {
     const wood = "#b07a44", woodD = "#6e4728";
@@ -456,9 +451,9 @@
     12: { sky: ["#f2a65a", "#fde2a8"], far: "#2a85c4", ground: ["#e2cf8e", "#d6c27e"], hills: "sea", drawGround: palms },
   };
 
-  /* ---------- 3D-острів ---------- */
+  /* ---------- карта острова ---------- */
 
-  const MAP_W = 400, MAP_H = 250, CELL = 6.25;
+  const MAP_W = 400, MAP_H = 250;
 
   // Маршрут спіраллю: від кварталу на південному заході, повз доки в бухті
   // й маяк на мисі — до обсерваторії на пагорбі й готелю на сході.
@@ -467,41 +462,6 @@
     5: [250, 52], 6: [318, 80], 7: [332, 140], 8: [262, 128],
     9: [196, 140], 10: [178, 196], 11: [258, 200], 12: [330, 186],
   };
-  const ROUTE = Object.keys(POINTS).map((k) => POINTS[k]);
-
-  const ell = (x, y, cx, cy, rx, ry) => Math.hypot((x - cx) / rx, (y - cy) / ry);
-  // Пагорб під обсерваторією.
-  const hillAt = (x, y) => 6.5 - Math.hypot(x - 262, (y - 206) * 1.2) / 9;
-
-  function tile(i, j) {
-    const x = i * CELL + CELL / 2, y = j * CELL + CELL / 2;
-    const n = fbm(x / 34, y / 34, 7);
-    const wobble = (n - 0.5) * 0.18;
-    let d = Math.min(ell(x, y, 200, 130, 165, 102), ell(x, y, 250, 38, 34, 24)) + wobble;
-    if (ell(x, y, 104, 32, 40, 24) < 1) d = Math.max(d, 1.08); // бухта біля доків
-    if (d > 1.14) return { type: "deep", h: 0 };
-    if (d > 1.0) return { type: "water", h: 0 };
-    if (d > 0.92) return { type: "sand", h: 1 };
-    // Скелястий мис під маяком.
-    if (ell(x, y, 250, 38, 34, 24) < 0.95) return { type: "rock", h: 5 + (n > 0.55 ? 1 : 0) };
-    const hill = hillAt(x, y);
-    // Бруківка вздовж маршруту (на пагорбі — на його висоті).
-    if (distToPolyline(x, y, ROUTE) < 4.5) return { type: "plaza", h: Math.max(2, Math.round(hill)) };
-    if (hill > 2.6) return { type: hill > 5.2 ? "forest" : "grass", h: Math.round(hill) };
-    return { type: "grass", h: 2 + (n > 0.62 ? 1 : 0) };
-  }
-
-  function trees() {
-    const out = [];
-    for (let i = 0; i < 260; i++) {
-      const x = hash(i, 1, 41) * MAP_W, y = hash(i, 2, 43) * MAP_H;
-      const d = ell(x, y, 200, 130, 165, 102);
-      if (d > 0.9 || ell(x, y, 104, 32, 46, 30) < 1 || distToPolyline(x, y, ROUTE) < 9) continue;
-      if (Object.values(POINTS).some(([px, py]) => Math.hypot(x - px, y - py) < 20)) continue;
-      out.push([x, y, hash(i, 3, 41) > 0.35 ? PALM : SHRUB]);
-    }
-    return out;
-  }
 
   Art.registerWorld("web", {
     mapW: MAP_W,
@@ -510,20 +470,10 @@
     landmarks: LANDMARKS,
     biomes: BIOMES,
     buildTerrain() {
-      // Пласка карта цьому світу не потрібна (є 3D), але лишаємо заглушку.
+      // Пласка карта цьому світу не потрібна (є намальована), але лишаємо заглушку.
       const c = Art.kit.makeCanvas(MAP_W, MAP_H);
       painter(c).r(0, 0, MAP_W, MAP_H, "#2a85c4");
       return c;
-    },
-    voxel: {
-      cols: MAP_W / CELL,
-      rows: MAP_H / CELL,
-      cell: CELL,
-      tile,
-      trees: trees(),
-      sky: ["#4fb0e6", "#bfeaf9"],
-      groundType: "plaza",
-      fx: { 1: "gold", 2: "paint", 3: "sparkle", 4: "gold", 5: "lighthouse", 6: "paint", 7: "fireworks", 8: "leaves", 9: "sparkle", 10: "gold", 11: "sparkle", 12: "fireworks" },
     },
   });
 })();

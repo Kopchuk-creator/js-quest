@@ -177,3 +177,7 @@ window.HUB_ART = {
     git:   { label: [798, 829], top: 580 },
   },
 };
+
+/* Намальовані трофеї локацій: { icon: "assets/trophies/<icon>.webp" }.
+   Іконку, якої тут ще немає, показує піксельний спрайт (Art.mountTrophy). */
+window.TROPHY_ART = {};

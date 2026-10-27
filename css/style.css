@@ -192,7 +192,7 @@ code, pre, textarea, kbd, .text-input { font-variant-ligatures: none; font-featu
 .map-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 370px); gap: var(--s5); align-items: start; }
 
 .map-card { position: relative; padding: 0; overflow: hidden; }
-.map-scroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; border-radius: var(--r-lg); }
+.map-scroll { overflow: hidden; scrollbar-width: thin; border-radius: var(--r-lg); }
 .map-stage { position: relative; width: 100%; aspect-ratio: 400 / 250; }
 .map-canvas { width: 100%; height: 100%; }
 .map-path { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -208,10 +208,6 @@ code, pre, textarea, kbd, .text-input { font-variant-ligatures: none; font-featu
 .map-stage.is-compact .loc-label.is-done:not(:hover):not(:focus-visible):not(.is-selected) .loc-name { padding: 3px; border-radius: 50%; }
 .map-stage.is-compact .loc-label:hover, .map-stage.is-compact .loc-label:focus-visible, .map-stage.is-compact .loc-label.is-selected { z-index: 2; }
 .map-stage.is-compact .loc-lock { width: 22px; height: 22px; }
-.map-tools { position: absolute; top: var(--s3); right: var(--s3); z-index: 4; display: flex; gap: 6px; }
-.map-tools[hidden], .map-tools [hidden] { display: none; }
-.map-tools .map-mode-btn { font-size: 13px; letter-spacing: 0.02em; }
-.map-tools .map-mode-btn .icon { width: 18px; height: 18px; }
 
 /* Намальована карта світу: ілюстрація під підписами локацій. */
 .map-art { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; user-select: none; -webkit-user-drag: none; }
@@ -222,10 +218,6 @@ code, pre, textarea, kbd, .text-input { font-variant-ligatures: none; font-featu
   border-radius: 50%; background: radial-gradient(closest-side, rgba(232, 238, 244, 0.72), rgba(232, 238, 244, 0.35) 60%, transparent);
   pointer-events: none; z-index: -1;
 }
-.map-tools .icon-btn { width: 36px; height: 36px; font-size: 18px; font-weight: 700; background: rgba(17, 18, 19, 0.82); color: var(--text); }
-.map-tools .icon-btn:hover { border-color: var(--yellow); }
-.map-scroll.is-zoomed { overflow: auto; max-height: 72vh; cursor: grab; }
-.map-scroll.is-dragging { cursor: grabbing; user-select: none; }
 .map-stage { flex: none; }
 .map-hero[hidden] { display: none; }
 .map-hero { position: absolute; width: 4.6%; pointer-events: none; z-index: 2; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.35)); }
@@ -306,6 +298,9 @@ a.lv-row:hover { background: var(--surface-2); }
 .mission-story { color: var(--text-muted); font-size: 16px; }
 .scene-frame { border-radius: var(--r); overflow: hidden; border: 1px solid var(--border-strong); background: #0c0d0e; }
 .scene-canvas { width: 100%; height: auto; aspect-ratio: 192 / 128; }
+/* Картка місії на карті: та сама ілюстрована сцена, що й на екрані місії, але ширша. */
+.scene-frame .scene-art { aspect-ratio: 3 / 2; }
+.scene-frame .scene-hero { height: 58%; }
 .mission-meta { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); align-items: center; margin: 0; }
 .mission-meta dd { margin: 0; display: flex; align-items: center; gap: var(--s2); font-weight: 600; color: var(--text-muted); }
 .mission-meta .xp-reward { color: var(--yellow); font-weight: 800; }
@@ -324,6 +319,7 @@ a.lv-row:hover { background: var(--surface-2); }
 }
 .slot.is-filled { border: 1px solid var(--border-strong); background: var(--surface-2); }
 .slot canvas { width: 40px; height: 40px; }
+.slot .trophy-img { width: 88%; height: 88%; object-fit: contain; }
 .parchment {
   flex: none; width: 190px; padding: var(--s3) var(--s4); text-align: center; font-size: 13px; font-weight: 600;
   color: #3b2a12; background: #d9bf8c; border-radius: 4px;
@@ -379,6 +375,7 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .trophy { display: flex; gap: var(--s4); padding: var(--s4); align-items: center; }
 .trophy-art { flex: none; width: 64px; height: 64px; border-radius: var(--r); background: var(--surface-2); display: grid; place-items: center; }
 .trophy-art canvas { width: 48px; height: 48px; }
+.trophy-art .trophy-img { width: 60px; height: 60px; object-fit: contain; }
 .trophy-art .is-silhouette { filter: brightness(0) opacity(0.35); }
 .trophy h3 { font-size: 16px; font-weight: 800; }
 .trophy p { color: var(--text-dim); font-size: 13px; }
@@ -503,9 +500,9 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 }
 .loc-node:hover .ln-tip, .loc-node:focus-visible .ln-tip { opacity: 1; }
 .loc-trophy { border-color: rgba(247, 210, 58, 0.5); background: rgba(14, 16, 24, 0.55); cursor: default; }
-.loc-trophy canvas { width: 70%; height: auto; filter: grayscale(1) brightness(0.6); }
+.loc-trophy canvas, .loc-trophy .trophy-img { width: 70%; height: auto; filter: grayscale(1) brightness(0.6); }
 .loc-trophy.is-owned { border-color: var(--yellow); box-shadow: 0 0 20px rgba(247, 210, 58, 0.8); }
-.loc-trophy.is-owned canvas { filter: none; }
+.loc-trophy.is-owned canvas, .loc-trophy.is-owned .trophy-img { filter: none; }
 
 /* Справжні кнопки — точно поверх намальованих на ілюстрації. */
 .loc-zoom {
@@ -602,7 +599,7 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .toast.is-warning { border-color: rgba(247, 210, 58, 0.55); }
 .toast.is-warning .icon { color: var(--yellow); }
 .toast.is-leaving { opacity: 0; transform: translateY(8px); }
-.toast-icon canvas { width: 40px; height: 40px; }
+.toast-icon canvas, .toast-icon .trophy-img { width: 40px; height: 40px; object-fit: contain; }
 
 /* =========================================================
    Екран 2 — місія
@@ -813,8 +810,6 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
 .scene-hero.is-cheer { animation: hero-cheer 0.9s var(--ease); }
 @keyframes hero-breathe { 50% { transform: translateY(-1.5%) scale(1.01); } }
 @keyframes hero-cheer { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-14%); } 55% { transform: translateY(0); } 72% { transform: translateY(-6%); } }
-html.motion-off .scene-hero, html.motion-off .scene-disk { animation: none; }
-html.motion-off .scene-pan, html.motion-off .scene-hero { transition: none; }
 .xp-chip {
   position: absolute; top: var(--s4); right: var(--s4); display: inline-flex; align-items: center; gap: var(--s2);
   padding: 8px 14px; border-radius: var(--r); background: rgba(17, 18, 19, 0.85); border: 1px solid var(--border-strong);
@@ -911,6 +906,8 @@ html.motion-off .scene-pan, html.motion-off .scene-hero { transition: none; }
   .nav-link.is-active::before { left: 25%; right: 25%; top: -6px; bottom: auto; width: auto; height: 3px; border-radius: 0 0 3px 3px; }
   .main { padding: var(--s4) var(--s4) 96px; }
   .topbar-title { gap: var(--s2); }
+  /* На вузькому екрані карта прокручується вбік, щоб підписи лишались читабельними. */
+  .map-scroll { overflow-x: auto; }
   .map-stage { min-width: 720px; }
   /* На вузькому екрані зала порталів прокручується вбік, щоб підписи лишались читабельними. */
   .hub-scene { overflow-x: auto; }
@@ -952,5 +949,3 @@ html.motion-off .scene-pan, html.motion-off .scene-hero { transition: none; }
   *, *::before, *::after { transition-duration: 0.01ms !important; }
   .trail.is-next { animation-duration: 3s; }
 }
-/* Гравець поставив анімацію на паузу кнопкою на карті. */
-.motion-off *, .motion-off *::before, .motion-off *::after { animation-play-state: paused !important; }

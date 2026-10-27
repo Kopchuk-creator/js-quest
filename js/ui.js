@@ -253,25 +253,5 @@
     setTimeout(() => el.remove(), 4700);
   }
 
-  /* ---------- рух і анімації ----------
-     "full"   — повна анімація;
-     "gentle" — система просить «зменшити рух»: світ живе, але без спалахів і вибухів;
-     "off"    — гравець поставив анімацію на паузу кнопкою (вибір запам'ятовується). */
-  const MOTION_KEY = "js-game-motion";
-
-  function motion() {
-    let paused = false;
-    try { paused = window.localStorage.getItem(MOTION_KEY) === "off"; } catch (e) { /* ignore */ }
-    if (paused) return "off";
-    return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "gentle" : "full";
-  }
-
-  function setMotion(on) {
-    try { window.localStorage.setItem(MOTION_KEY, on ? "on" : "off"); } catch (e) { /* ignore */ }
-    document.documentElement.classList.toggle("motion-off", !on);
-  }
-
-  document.documentElement.classList.toggle("motion-off", motion() === "off");
-
-  window.UI = { icon, esc, md, highlight, guessLang, renderSidebar, refreshSidebarHero, setActiveNav, toast, warnStorage, motion, setMotion };
+  window.UI = { icon, esc, md, highlight, guessLang, renderSidebar, refreshSidebarHero, setActiveNav, toast, warnStorage };
 })();
