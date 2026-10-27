@@ -86,6 +86,36 @@
       return next ? next.id : null;
     }
 
+    function resumeLevelId(progress) {
+      const next = currentLevelId(progress);
+      const saved = progress.resume;
+      if (saved && saved.phase === "variation" && byId.has(saved.levelId) && progress.completed.includes(saved.levelId) && !progress.variations.includes(saved.levelId)) return saved.levelId;
+      if (saved && saved.phase === "mission" && saved.levelId === next) return next;
+      return next;
+    }
+    function resumeUrl(root, progress) {
+      const id = resumeLevelId(progress || load());
+      if (!id) return (root || "") + "index.html?world=" + worldId + "#map";
+      const saved = (progress || load()).resume;
+      return (root || "") + "levels/level.html?world=" + worldId + "&id=" + id + (saved && saved.levelId === id && saved.phase === "variation" ? "&stage=variation" : "");
+    }
+    function setResume(id, phase) {
+      const progress = load();
+      if (!byId.has(id)) return progress;
+      const variation = phase === "variation" && byId.get(id).understanding && !progress.variations.includes(id);
+      if (progress.completed.includes(id) && !variation) return progress;
+      progress.resume = { levelId: id, phase: variation ? "variation" : "mission" };
+      GameStore.save(progress, worldId);
+      return progress;
+    }
+    function toggleReview(id) {
+      const progress = load();
+      progress.review = Array.isArray(progress.review) ? progress.review : [];
+      const marked = progress.review.includes(id);
+      progress.review = marked ? progress.review.filter((n) => n !== id) : progress.review.concat(id);
+      GameStore.save(progress, worldId);
+      return !marked;
+    }
     function locationOf(levelOrId) {
       const level = typeof levelOrId === "number" ? byId.get(levelOrId) : levelOrId;
       return level ? arcToLocation[level.arcNumber] : null;
@@ -124,6 +154,8 @@
       progress.streak = firstTry ? progress.streak + 1 : 0;
       progress.bestStreak = Math.max(progress.bestStreak, progress.streak);
       delete progress.fails[id];
+      if (level.understanding && !progress.variations.includes(id)) progress.resume = { levelId: id, phase: "variation" };
+      else if (progress.resume && progress.resume.levelId === id) delete progress.resume;
 
       const loc = locationOf(level);
       if (locationStatus(progress, loc) === "done") result.location = loc;
@@ -159,6 +191,10 @@
       isUnlocked,
       levelStatus,
       currentLevelId,
+      resumeLevelId,
+      resumeUrl,
+      setResume,
+      toggleReview,
       locationOf,
       locationProgress,
       locationStatus,

@@ -122,7 +122,7 @@
     const c = s.completion;
     const pct = Math.round(c.ratio * 100);
     const progress = api.load();
-    const nextId = api.currentLevelId(progress);
+    const nextId = api.resumeLevelId(progress);
     const nextLoc = nextId ? api.locationOf(nextId) : null;
     const thumb = nextLoc && (window.LOCATION_ART || {})[w.id] && window.LOCATION_ART[w.id][nextLoc.id];
     html +=
@@ -139,7 +139,7 @@
         '<a class="next-step" href="index.html?world=' + w.id + "#loc-" + nextLoc.id + '">' +
         (thumb ? '<img src="' + thumb.src + '" alt="" loading="lazy">' : '<span class="next-step-ph">' + UI.icon("compass") + "</span>") +
         "<span>" + UI.esc(nextLoc.name) + "</span>" + UI.icon("chevronRight") + "</a>" +
-        '<a class="btn btn-primary btn-block" href="' + api.levelUrl(nextId) + '">' + (c.done ? "Продовжити пригоду" : "Почати пригоду") + UI.icon("arrowRight") + "</a>";
+      '<a class="btn btn-primary btn-block" href="' + api.resumeUrl("", progress) + '">' + (c.done ? "Продовжити пригоду" : "Почати пригоду") + UI.icon("arrowRight") + "</a>";
     } else {
       html += '<p class="wp-note is-done">' + UI.icon("check") + "<span>Світ повністю відновлено — можна повертатися до будь-якої місії.</span></p>" +
         '<a class="btn btn-primary btn-block" href="index.html?world=' + w.id + '#map">До карти світу' + UI.icon("arrowRight") + "</a>";
@@ -363,7 +363,7 @@
 
   function renderMissionCard() {
     const card = $("#mission-card");
-    const currentId = Game.currentLevelId(progress);
+    const currentId = Game.resumeLevelId(progress);
     clearInterval(sceneTimer);
     if (!currentId) {
       const last = LOCATIONS[LOCATIONS.length - 1];
@@ -388,7 +388,7 @@
       '<div><dt class="visually-hidden">Нагорода</dt><dd class="xp-reward">' + UI.icon("star") + "+" + Game.xpFor(level) + " XP</dd></div>" +
       '<div><dt class="visually-hidden">Тип</dt><dd class="task-type">' + Game.TASK_LABELS[level.taskType] + "</dd></div>" +
       "</dl>" +
-      '<a class="btn btn-primary btn-lg" href="' + levelUrl(currentId) + '">' + UI.icon("play") + "Почати місію</a>";
+      '<a class="btn btn-primary btn-lg" href="' + Game.resumeUrl("", progress) + '">' + UI.icon("play") + (progress.resume && progress.resume.phase === "variation" ? "Продовжити перевірку розуміння" : "Почати місію") + "</a>";
     cardScene(loc, currentId, index / loc.levels.length);
   }
 
@@ -625,11 +625,54 @@
               '<p class="trophy-event">' + (has ? UI.icon("check") + UI.esc(loc.event) : "Відкриється після проходження локації") + "</p></div></li>";
           }).join("") + "</ul>";
       }).join("") +
+      '<section class="card"><h2>Резервна копія</h2><p>Експортуй або віднови прогрес, досвід, зміни умов і чернетки всіх доступних світів.</p>' +
+      '<button type="button" class="btn btn-ghost" id="backup-export">Завантажити резервну копію</button> ' +
+      '<button type="button" class="btn btn-ghost" id="backup-import-button">Перевірити файл для відновлення</button>' +
+      '<input type="file" id="backup-file" accept="application/json,.json" hidden></section>' +
+      (() => {
+        const marked = worlds.flatMap((api) => {
+          const p = api.load();
+          return (p.review || []).map((id) => ({ api, level: api.getLevel(id) })).filter((item) => item.level);
+        });
+        return '<section class="card"><h2>Теми для повторення</h2>' + (marked.length
+          ? '<ul>' + marked.map(({ api, level }) => '<li><a href="' + api.levelUrl(level.id) + '">' + UI.esc(level.title) + ' · ' + UI.esc(api.meta.name) + '</a></li>').join("") + '</ul>'
+          : '<p>Позначай місії під час навчання, щоб повернутися до них тут.</p>') + '</section>';
+      })() +
       '<div class="danger-zone"><button type="button" class="btn btn-ghost" id="reset-progress">' + UI.icon("reset") + "Почати пригоду спочатку</button></div>";
     Art.mount($("#profile-avatar"), Art.hero(), "Аватар героя");
     document.querySelectorAll(".trophy-art").forEach((el) => {
       const c = Art.mountTrophy(el, el.dataset.item);
       if (!el.closest(".is-owned")) c.classList.add("is-silhouette");
+    });
+    $("#backup-export").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(GameStore.exportBackup(), null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "kodomantry-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+    $("#backup-import-button").addEventListener("click", () => $("#backup-file").click());
+    $("#backup-file").addEventListener("change", async (event) => {
+      const input = event.currentTarget;
+      const file = input.files[0];
+      if (!file) return;
+      try {
+        const raw = await file.text();
+        const preview = GameStore.previewBackup(raw);
+        const summary = preview.map((w) => w.name + ': ' + w.completed + ' місій, ' + w.xp + ' XP, ' + w.variations + ' змін умов, ' + w.drafts + ' чернеток' + (w.review ? ', ' + w.review + ' тем для повторення' : '') + (w.resume ? ', повернення до місії ' + w.resume.levelId + (w.resume.phase === 'variation' ? ' — зміна умови' : '') : '')).join('\n');
+        if (window.confirm('Файл перевірено. Буде замінено дані цих світів:\n\n' + summary + '\n\nПродовжити відновлення?')) {
+          GameStore.restoreBackup(raw);
+          progress = Game.load();
+          renderAll();
+          UI.toast('Резервну копію відновлено.');
+        }
+      } catch (error) {
+        window.alert('Не вдалося відновити резервну копію: ' + error.message + '\nДані гри не змінено.');
+      } finally {
+        input.value = '';
+      }
     });
     $("#reset-progress").addEventListener("click", () => {
       if (window.confirm("Скинути прогрес, досвід, чернетки й трофеї в усіх світах? Цю дію не можна скасувати.")) {
