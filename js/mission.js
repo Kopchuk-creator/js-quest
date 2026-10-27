@@ -53,6 +53,8 @@
     return;
   }
   const alreadyDone = startProgress.completed.includes(levelId);
+  const requestedStage = params.get("stage") === "variation";
+  if (!alreadyDone) Game.setResume(levelId, "mission");
 
   const state = {
     solved: false,
@@ -197,7 +199,8 @@
       understandingHtml() +
       '<details class="disclosure" id="theory"><summary>' + UI.icon("book") + "Сувій знань" + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><p>' + UI.md(level.concept) + "</p>" +
       (level.example ? '<pre class="code-block">' + UI.highlight(level.example, level.exampleLang || UI.guessLang(level.example, lang)) + "</pre>" : "") + "</div></details>" +
-      '<details class="disclosure" id="hint"><summary>' + UI.icon("bulb") + "Підказка" + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><p>' + UI.md(level.hint) + '</p><div id="solution-slot"></div></div></details>'
+      '<details class="disclosure" id="hint"><summary>' + UI.icon("bulb") + "Поступова підказка" + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><p id="hint-stage" aria-live="polite">Спершу запитання, потім ідея з «Сувою знань», далі — короткий приклад.</p><button type="button" class="btn btn-ghost btn-sm" id="hint-next">Показати запитання</button><div id="solution-slot"></div></div></details>' +
+      '<button type="button" class="btn btn-ghost btn-sm" id="review-toggle" aria-pressed="' + ((startProgress.review || []).includes(levelId)) + '">' + ((startProgress.review || []).includes(levelId) ? "Прибрати з повторення" : "Позначити для повторення") + '</button>'
     );
   }
 
@@ -250,6 +253,7 @@
   }
 
   async function runVariation() {
+    Game.setResume(levelId, "variation");
     const u = level.understanding;
     const v = u.variation;
     const btn = $("#u-run");
@@ -268,7 +272,7 @@
           rows[i].querySelector(".mark").innerHTML = l.pass ? UI.icon("check") : UI.icon("close");
         });
         renderConsole([consoleLine("log", "Зміна умови")].concat(res.lines.map((l, i) =>
-          consoleLine(l.pass ? "pass" : "fail", "Рядок " + (i + 1) + ": " + (l.filled ? l.given : "(порожньо)")))));
+          consoleLine(l.pass ? "pass" : "fail", "Рядок " + (i + 1) + ": " + (l.filled ? l.given : "(порожньо)"), l.pass ? "" : "очікувалось: " + l.expected + " · отримано: " + (l.filled ? l.given : "(порожньо)")))));
         pass = res.pass;
         const wrong = res.lines.filter((l) => !l.pass).length;
         detail = wrong === 1 ? "Один рядок не збігся." : "Не збіглося рядків: " + wrong + ".";
@@ -295,8 +299,9 @@
       const progress = GameStore.load();
       if (!progress.variations.includes(levelId)) {
         progress.variations.push(levelId);
-        GameStore.save(progress);
       }
+      if (progress.resume && progress.resume.levelId === levelId) delete progress.resume;
+      GameStore.save(progress);
       feedback.textContent = "Зміну умови виконано. Лишилось пояснення — його перевіряє ментор.";
       setMentor("Зміну умови виконано! А тепер поясни мені своїми словами: " + u.question, "success");
     } else {
@@ -546,6 +551,32 @@
     else GameStore.saveDraft(levelId, draftText());
   }
 
+  function answerDraft() {
+    return JSON.stringify({
+      answers: Array.from(document.querySelectorAll(".answer-line[data-line] input, .blank-input"), (input) => input.value),
+      choice: (document.querySelector('input[name="choice"]:checked') || {}).value || "",
+      variation: Array.from(document.querySelectorAll("#understand .answer-line input"), (input) => input.value),
+    });
+  }
+  function restoreAnswerDraft() {
+    if (usesEditor) return;
+    let saved;
+    try { saved = JSON.parse(GameStore.getDraft(levelId)); } catch (_) { return; }
+    if (!saved || typeof saved !== "object") return;
+    document.querySelectorAll(".answer-line[data-line] input, .blank-input").forEach((input, i) => { input.value = saved.answers && saved.answers[i] || ""; });
+    if (saved.choice !== "") {
+      const choice = document.querySelector('input[name="choice"][value="' + Number(saved.choice) + '"]');
+      if (choice) choice.checked = true;
+    }
+    document.querySelectorAll("#understand .answer-line input").forEach((input, i) => { input.value = saved.variation && saved.variation[i] || ""; });
+  }
+  function saveAnswerDraft() {
+    if (usesEditor) return;
+    const data = JSON.parse(answerDraft());
+    if (!data.answers.some(Boolean) && !data.choice && !data.variation.some(Boolean)) GameStore.clearDraft(levelId);
+    else GameStore.saveDraft(levelId, JSON.stringify(data));
+  }
+
   let draftTimer = null;
   let previewTimer = null;
   function onCodeInput(isReset) {
@@ -617,6 +648,7 @@
 
   async function run() {
     if (state.running) return;
+    if (!alreadyDone) Game.setResume(levelId, "mission");
     state.running = true;
     const btn = $("#run");
     btn.disabled = true;
@@ -674,7 +706,7 @@
       row.classList.toggle("is-right", l.pass);
       row.classList.toggle("is-wrong", !l.pass);
       row.querySelector(".mark").innerHTML = l.pass ? UI.icon("check") : UI.icon("close");
-      return consoleLine(l.pass ? "pass" : "fail", "Рядок " + (i + 1) + ": " + (l.filled ? l.given : "(порожньо)"), l.pass ? "" : l.filled ? "консоль виведе інше" : "впиши відповідь");
+      return consoleLine(l.pass ? "pass" : "fail", "Рядок " + (i + 1) + ": " + (l.filled ? l.given : "(порожньо)"), l.pass ? "" : "очікувалось: " + l.expected + " · отримано: " + (l.filled ? l.given : "(порожньо)"));
     });
     renderConsole(lines);
     setCheck("filled", res.lines.every((l) => l.filled));
@@ -697,7 +729,7 @@
     checked.closest(".option").classList.add(res.pass ? "is-right" : "is-wrong");
     setCheck("filled", true);
     setCheck("correct", res.pass);
-    renderConsole([consoleLine(res.pass ? "pass" : "fail", res.pass ? "Правильно!" : "Цей варіант не підходить")]);
+    renderConsole([consoleLine(res.pass ? "pass" : "fail", res.pass ? "Правильно!" : "Обрано: " + String(res.chosen) + ". Порівняй його властивості з умовою.")]);
     if (res.pass) return succeed();
     fail("Цей варіант не підходить. Перечитай теорію в «Сувої знань».");
   }
@@ -709,7 +741,7 @@
       inputs[i].classList.toggle("is-right", b.pass);
       inputs[i].classList.toggle("is-wrong", !b.pass);
     });
-    renderConsole(res.blanks.map((b, i) => consoleLine(b.pass ? "pass" : "fail", "Пропуск " + (i + 1) + ": " + (b.filled ? b.given.trim() : "(порожньо)"))));
+    renderConsole(res.blanks.map((b, i) => consoleLine(b.pass ? "pass" : "fail", "Пропуск " + (i + 1) + ": " + (b.filled ? b.given.trim() : "(порожньо)"), b.pass ? "" : "отримано: " + (b.filled ? b.given.trim() : "(порожньо)") + " · звір із прикладом у «Сувої знань»")));
     setCheck("filled", res.blanks.every((b) => b.filled));
     setCheck("correct", res.pass);
     if (res.pass) return succeed();
@@ -826,7 +858,9 @@
       document.querySelectorAll(".text-input").forEach((i) => { i.value = ""; i.classList.remove("is-right", "is-wrong"); });
       document.querySelectorAll(".answer-line").forEach((r) => { r.classList.remove("is-right", "is-wrong"); r.querySelector(".mark").innerHTML = ""; });
       document.querySelectorAll('input[name="choice"]').forEach((i) => { i.checked = false; });
+      document.querySelectorAll("#understand .answer-line input").forEach((i) => { i.value = ""; i.classList.remove("is-right", "is-wrong"); });
       document.querySelectorAll(".option").forEach((o) => o.classList.remove("is-right", "is-wrong"));
+      GameStore.clearDraft(levelId);
     }
     checklistItems().forEach((it) => setCheck(it.key, null));
     renderConsole([]);
@@ -835,6 +869,7 @@
   /* ---------- старт ---------- */
 
   render();
+  restoreAnswerDraft();
   if (usesEditor) setupEditor();
   drawScene();
   if (sceneArt) {
@@ -843,9 +878,43 @@
 
   $("#run").addEventListener("click", run);
   $("#reset").addEventListener("click", reset);
+  let hintStep = 0;
+  $("#hint-next").addEventListener("click", (event) => {
+    hintStep = Math.min(hintStep + 1, 3);
+    const output = $("#hint-stage");
+    const button = event.currentTarget;
+    if (hintStep === 1) {
+      const question = String(level.prompt || "").split(/[.!?]/)[0];
+      output.textContent = "Навідне запитання: " + (question ? question + "?" : "Які дані отримуєш і який результат мають перевірки?");
+    } else if (hintStep === 2) {
+      output.innerHTML = UI.md(level.concept || "") + (level.hint ? "<p>Підказка: " + UI.md(level.hint) + "</p>" : "");
+    } else {
+      const snippet = String(level.example || "").split("\n").map((line) => line.trim()).find((line) => line && !line.startsWith("//"));
+      output.innerHTML = snippet
+        ? "Невеликий приклад із сувою знань:<pre class=\"code-block\"><code>" + UI.esc(snippet.slice(0, 180)) + "</code></pre>"
+        : "Повернись до прикладу в «Сувої знань» і застосуй лише потрібний фрагмент.";
+    }
+    button.textContent = hintStep >= 3 ? "Підказки показано" : "Наступний рівень підказки";
+    button.disabled = hintStep >= 3;
+  });
+  $("#review-toggle").addEventListener("click", (event) => {
+    const marked = Game.toggleReview(levelId);
+    event.currentTarget.setAttribute("aria-pressed", String(marked));
+    event.currentTarget.textContent = marked ? "Прибрати з повторення" : "Позначити для повторення";
+  });
+  main.addEventListener("input", (event) => {
+    if (!usesEditor && event.target.matches(".answer-line[data-line] input, .blank-input, #understand .answer-line input")) saveAnswerDraft();
+  });
+  main.addEventListener("change", (event) => {
+    if (!usesEditor && event.target.matches('input[name="choice"]')) saveAnswerDraft();
+  });
   if (level.understanding) {
     $("#u-run").addEventListener("click", runVariation);
     syncUnderstanding();
+  }
+  if (requestedStage && level.understanding) {
+    const understanding = $("#understand");
+    if (understanding) { understanding.scrollIntoView({ block: "center" }); $("#u-run").focus({ preventScroll: true }); }
   }
   // Довідник відкривається на поточній локації — щоб швидко підглянути схожі теми.
   $("#open-handbook").addEventListener("click", () => Handbook.openDrawer({ root: "../", world: Game.WORLD_ID, location: loc.id }));

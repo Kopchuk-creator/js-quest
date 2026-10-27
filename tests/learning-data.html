@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Перевірки збереження — Кодомандри</title>
+  <style>body{font:15px/1.5 system-ui,sans-serif;background:#17191d;color:#eee;padding:24px}li{margin:.35em 0}.ok{color:#7ee0a5}.bad{color:#ff8d82}code{color:#cbd4e1}</style>
+  <script src="../js/worlds.js"></script>
+  <script src="../js/levels.js"></script>
+  <script src="../js/levels-checks.js"></script>
+  <script src="../js/levels-web.js"></script>
+  <script src="../js/storage.js"></script>
+  <script src="../js/game.js"></script>
+</head>
+<body>
+  <h1>Перевірки збереження й навчального процесу</h1>
+  <p>Запускай цю сторінку в новому приватному/ізольованому браузерному контексті: тест працює лише з його тимчасовим localStorage.</p>
+  <p id="summary">Перевіряю…</p><ol id="results"></ol>
+  <script>
+    (() => {
+      const results = [];
+      const check = (name, pass, detail) => results.push({ name, pass: !!pass, detail: detail || "" });
+      const api = Game.forWorld("js");
+      const initial = {
+        version: 1, completed: [1], xp: 50, streak: 0, bestStreak: 0, fails: {},
+        celebrated: [], variations: [], review: [], resume: { levelId: 2, phase: "mission" }
+      };
+      GameStore.save(initial, "js");
+      GameStore.saveDraft(2, "function draft() { return 42; }", "js");
+      try {
+        const backup = GameStore.exportBackup(["js"]);
+        const json = JSON.stringify(backup);
+        check("експорт містить формат і версію", backup.format === "kodomantry-backup" && backup.version === 1);
+        check("попередній перегляд рахує прогрес, чернетку й етап", GameStore.previewBackup(json).some((w) => w.id === "js" && w.completed === 1 && w.xp === 50 && w.drafts === 1));
+
+        GameStore.save({ ...initial, completed: [1, 2], xp: 125 }, "js");
+        GameStore.saveDraft(2, "інша чернетка", "js");
+        GameStore.restoreBackup(json);
+        check("відновлення повертає місії та XP", GameStore.load("js").completed.join(",") === "1" && GameStore.load("js").xp === 50);
+        check("відновлення повертає чернетку", GameStore.getDraft(2, "js") === "function draft() { return 42; }");
+        check("відновлення повертає незавершений етап", api.resumeUrl("", GameStore.load("js")).includes("id=2"));
+        check("поточний структурований формат зберігає додаткові поля", GameStore.load("js").version === 1 && GameStore.load("js").resume.phase === "mission");
+
+        const beforeInvalid = JSON.stringify({ p: GameStore.load("js"), d: GameStore.getDraft(2, "js") });
+        const invalid = JSON.parse(json);
+        invalid.worlds.js.drafts["999"] = "підроблена чернетка";
+        let rejected = false;
+        try { GameStore.restoreBackup(invalid); } catch (_) { rejected = true; }
+        check("некоректний файл відхилено", rejected);
+        check("некоректний файл не змінює жодної частини стану",
+          beforeInvalid === JSON.stringify({ p: GameStore.load("js"), d: GameStore.getDraft(2, "js") }));
+
+        localStorage.setItem("js-game-progress", JSON.stringify([1, 2]));
+        check("старий формат-масив сумісний", GameStore.load("js").completed.join(",") === "1,2" && GameStore.load("js").xp === 0);
+        GameStore.save(initial, "js");
+
+        GameStore.save({ ...initial, completed: [1, 2], xp: 125, variations: [] }, "js");
+        check("пройдена місія не означає пройдену зміну умови",
+          GameStore.load("js").completed.includes(2) && !GameStore.load("js").variations.includes(2));
+        const variationState = GameStore.load("js");
+        variationState.variations.push(2);
+        GameStore.save(variationState, "js");
+        check("зміну умови можна позначити окремо", GameStore.load("js").variations.includes(2));
+
+        GameStore.save({ ...initial, completed: [1, 2], xp: 125, variations: [], resume: null }, "js");
+        api.setResume(2, "variation");
+        check("продовження веде до незавершеної зміни умови окремо від наступної місії",
+          api.resumeLevelId(GameStore.load("js")) === 2 && api.resumeUrl("", GameStore.load("js")).includes("stage=variation"));
+        const afterVariation = GameStore.load("js");
+        afterVariation.variations.push(2);
+        delete afterVariation.resume;
+        GameStore.save(afterVariation, "js");
+        check("після зміни умови продовження переходить до наступної місії", api.resumeLevelId(GameStore.load("js")) === 3);
+
+        const xpBefore = GameStore.load("js").xp;
+        check("тему можна позначити для повторення", api.toggleReview(3) && GameStore.load("js").review.includes(3));
+        check("повторення не змінює XP чи пройдені місії", GameStore.load("js").xp === xpBefore && GameStore.load("js").completed.join(",") === "1,2");
+        check("позначку повторення можна зняти", !api.toggleReview(3) && !GameStore.load("js").review.includes(3));
+
+        const apiWeb = Game.forWorld("web");
+        const webState = { version: 1, completed: [], xp: 0, streak: 0, bestStreak: 0, fails: {}, celebrated: [], variations: [], review: [] };
+        GameStore.save(webState, "web");
+        check("прогрес світів ізольований", GameStore.load("js").completed.includes(1) && GameStore.load("web").completed.length === 0 && !!apiWeb);
+
+        GameStore.save(initial, "js");
+        GameStore.saveDraft(2, "первісна чернетка", "js");
+        const diskProgress = localStorage.getItem("js-game-progress");
+        const diskDrafts = localStorage.getItem("js-game-drafts");
+        const originalSetItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (key, value) {
+          if (key === "js-game-drafts") throw new Error("імітація переповнення сховища");
+          return originalSetItem.call(this, key, value);
+        };
+        let writeFailed = false;
+        try {
+          const target = { ...backup, worlds: { js: { progress: { ...initial, completed: [1, 2], xp: 150 }, drafts: { 2: "нова чернетка" } } } };
+          GameStore.restoreBackup(target);
+        } catch (_) { writeFailed = true; }
+        Storage.prototype.setItem = originalSetItem;
+        check("помилка запису перериває імпорт", writeFailed);
+        check("помилка запису відновлює початковий стан на диску",
+          localStorage.getItem("js-game-progress") === diskProgress && localStorage.getItem("js-game-drafts") === diskDrafts);
+      } catch (error) {
+        check("тестовий сценарій завершився без винятку", false, error.stack || error.message);
+      }
+      const summary = document.querySelector("#summary");
+      const failed = results.filter((r) => !r.pass);
+      summary.className = failed.length ? "bad" : "ok";
+      summary.textContent = failed.length ? "Не пройшло " + failed.length + " з " + results.length : "Усі " + results.length + " перевірок пройдено ✓";
+      document.querySelector("#results").innerHTML = results.map((r) =>
+        "<li class='" + (r.pass ? "ok" : "bad") + "'>" + (r.pass ? "✓ " : "✗ ") +
+        r.name + (r.detail ? " <code>" + String(r.detail).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])) + "</code>" : "") + "</li>"
+      ).join("");
+    })();
+  </script>
+</body>
+</html>
