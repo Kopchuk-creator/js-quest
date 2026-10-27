@@ -669,23 +669,23 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
    ========================================================= */
 
 .mission {
-  display: grid; gap: var(--s4) var(--s4); max-width: 1560px; margin: 0 auto;
-  grid-template-columns: minmax(300px, 0.82fr) minmax(0, 1.35fr);
+  display: grid; gap: var(--s4); max-width: 1560px; margin: 0 auto; min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "head head"
-    "task work"
-    "learning work"
-    "scene result";
-  grid-template-rows: auto auto auto auto;
+    "head"
+    "scene"
+    "columns";
+  grid-template-rows: auto auto auto;
   align-items: start;
 }
+.mission.is-focus { grid-template-areas: "head" "columns"; grid-template-rows: auto auto; }
 .m-head { grid-area: head; display: flex; flex-direction: column; gap: var(--s2); }
-.m-task { grid-area: task; align-self: stretch; }
-.m-work { grid-area: work; display: flex; flex-direction: column; gap: var(--s4); min-width: 0; align-self: start; }
+.m-columns { grid-area: columns; display: grid; grid-template-columns: minmax(300px, 0.82fr) minmax(0, 1.35fr); gap: var(--s4); align-items: start; min-width: 0; }
+.m-brief, .m-work { display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
+.m-task { align-self: start; }
 .m-editor { align-self: stretch; }
-.m-scene { grid-area: scene; }
-.result { grid-area: result; }
-.m-learning { grid-area: learning; display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
+.m-scene { grid-area: scene; min-width: 0; }
+.m-learning { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
 .learning-disclosure[open] > .learning-body { padding: 0 var(--s3) var(--s3); }
 .learning-disclosure .understand { padding: var(--s3); gap: var(--s2); }
 .learning-disclosure .u-block { padding-top: var(--s2); }
@@ -875,6 +875,7 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
 
 /* Ілюстрована сцена місії: частина ілюстрації локації + Мандрівник на передньому плані. */
 .scene-art { position: relative; aspect-ratio: 1.1; overflow: hidden; background: #0c0d0e; }
+.mission .scene-art { height: clamp(150px, 14vw, 200px); aspect-ratio: auto; }
 .scene-pan { position: absolute; left: 0; top: 0; overflow: hidden; transition: transform 0.9s var(--ease); will-change: transform; }
 .scene-bg { position: absolute; left: 0; width: 100%; height: auto; display: block; user-select: none; -webkit-user-drag: none; }
 .scene-disk {
@@ -892,6 +893,7 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45)); transform-origin: 50% 100%;
   animation: hero-breathe 3.2s ease-in-out infinite;
 }
+.mission .scene-hero { height: 82%; }
 .scene-hero.is-cheer { animation: hero-cheer 0.9s var(--ease); }
 @keyframes hero-breathe { 50% { transform: translateY(-1.5%) scale(1.01); } }
 @keyframes hero-cheer { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-14%); } 55% { transform: translateY(0); } 72% { transform: translateY(-6%); } }
@@ -957,14 +959,6 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-
 .mission.is-focus .m-story { display: none; }
 #focus-toggle[aria-pressed="true"] { border-color: var(--yellow); color: var(--yellow); background: var(--yellow-soft); }
 body:has(.mission.is-focus) .sidebar-hero { display: none; }
-@media (min-width: 1241px) {
-  .mission.is-focus {
-    grid-template-columns: minmax(300px, 0.82fr) minmax(0, 1.35fr);
-    grid-template-areas: "head head" "task work" "learning work" ". result";
-    grid-template-rows: auto auto auto auto;
-  }
-}
-
 /* ---------- розділи місії на телефоні ---------- */
 .m-switch { display: none; }
 
@@ -973,16 +967,7 @@ body:has(.mission.is-focus) .sidebar-hero { display: none; }
    ========================================================= */
 
 @media (max-width: 1240px) {
-  .mission {
-    grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
-    grid-template-areas:
-      "head head"
-      "task work"
-      "learning work"
-      "scene result";
-    grid-template-rows: none;
-  }
-  .mission.is-focus { grid-template-areas: "head head" "task work" "learning work" ". result"; }
+  .m-columns { grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr); }
 }
 
 @media (max-width: 1100px) {
@@ -1027,7 +1012,11 @@ body:has(.mission.is-focus) .sidebar-hero { display: none; }
 @media (max-width: 760px) {
   /* Стовпчик замість сітки: приховані розділи не лишають порожніх рядків із відступами. */
   .mission { display: flex; flex-direction: column; align-items: stretch; gap: var(--s4); }
-  .mission[data-pane="result"] .m-work { order: 4; }
+  .mission .m-scene { order: 1; }
+  .mission .m-columns { order: 2; display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; }
+  .mission[data-pane="task"] .m-columns > .m-work,
+  .mission[data-pane="code"] .m-columns > .m-brief,
+  .mission[data-pane="result"] .m-columns > .m-brief { display: none; }
   .mission .m-editor > .editor { min-height: 52vh; max-height: none; }
   /* Вкладки «Завдання / Код / Результат»: видно один розділ, редактор отримує весь екран. */
   .m-switch {
@@ -1047,8 +1036,6 @@ body:has(.mission.is-focus) .sidebar-hero { display: none; }
   .mission[data-pane="task"] [data-pane]:not([data-pane="task"]),
   .mission[data-pane="code"] [data-pane]:not([data-pane="code"]),
   .mission[data-pane="result"] [data-pane]:not([data-pane="result"]) { display: none; }
-  /* «Результат»: спершу підсумок і консоль, сцена зі святкуванням — після них. */
-  .mission .m-scene { order: 1; }
   .m-head h1 { font-size: 28px; }
   .mission[data-pane="code"] .editor { min-height: 52vh; max-height: none; }
   /* Кнопки «Запустити / Скинути» липнуть до низу видимої області — і над клавіатурою.
@@ -1067,9 +1054,9 @@ body:has(.mission.is-focus) .sidebar-hero { display: none; }
   .answer-line { grid-template-columns: minmax(0, 1fr) 24px; }
   .tab { padding: 10px 10px; gap: 6px; font-size: 13px; }
   .answer-line label { grid-column: 1 / -1; }
-  .scene-art { aspect-ratio: 1.6; }
+  .mission .scene-art { height: clamp(128px, 42vw, 176px); aspect-ratio: auto; }
   /* Герой більший: на ширшому вікні він має закривати намальованого на ілюстрації. */
-  .scene-hero { height: 62%; }
+  .mission .scene-hero { height: 76%; }
 }
 
 @media (max-width: 420px) {
