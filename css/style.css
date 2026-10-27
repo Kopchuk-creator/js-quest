@@ -5,6 +5,15 @@
    увесь текст і UI — сучасні й читабельні.
    ========================================================= */
 
+@font-face {
+  font-family: "Roboto Slab";
+  src: url("../assets/fonts/roboto-slab-cyrillic-800.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  unicode-range: U+0400-045F, U+0490-0491;
+}
+
 :root {
   --bg: #111213;
   --bg-raised: #161719;
@@ -100,8 +109,11 @@ code, pre, textarea, kbd, .text-input { font-variant-ligatures: none; font-featu
 }
 
 .logo { display: flex; align-items: center; padding: 0 var(--s4); text-decoration: none; min-height: 56px; }
-.logo-wordmark { color: var(--text); font-size: 19px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.2; }
-.logo:hover .logo-wordmark { color: var(--yellow); }
+.logo-wordmark { display: inline-flex; white-space: nowrap; font-family: "Roboto Slab", Georgia, serif; font-size: clamp(20px, 1.6vw, 24px); font-weight: 800; letter-spacing: -0.055em; line-height: 1.2; }
+.logo-wordmark-main { color: #fff; transition: color 0.18s ease; }
+.logo-wordmark-accent { color: var(--yellow); transition: color 0.18s ease; }
+.logo:hover .logo-wordmark-main, .logo:focus-visible .logo-wordmark-main { color: var(--yellow-hover); }
+.logo:hover .logo-wordmark-accent, .logo:focus-visible .logo-wordmark-accent { color: var(--text); }
 
 .nav ul { display: flex; flex-direction: column; gap: var(--s1); padding: 0 var(--s2); }
 .nav-link {

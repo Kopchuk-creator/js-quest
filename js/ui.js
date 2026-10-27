@@ -192,7 +192,7 @@
     ];
     container.innerHTML =
       '<a class="logo" href="' + root + 'index.html#hub">' +
-      '<span class="logo-wordmark">Кодомандри</span></a>' +
+      '<span class="logo-wordmark"><span class="logo-wordmark-main">Кодо</span><span class="logo-wordmark-accent">мандри</span></span></a>' +
       '<nav class="nav" aria-label="Головне меню"><ul>' +
       items.map((it) =>
         '<li><a class="nav-link' + (it.id === active ? " is-active" : "") + '" data-nav="' + it.id + '" href="' + it.href + '"' +
