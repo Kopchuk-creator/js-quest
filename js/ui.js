@@ -270,8 +270,14 @@
     delete ctx.actionSlot;
     el.innerHTML = (actions[el.dataset.actionSlot] || [])
       .filter((a) => !a.isVisible || a.isVisible(ctx))
-      .map((a) => '<button type="button" class="btn btn-' + (a.variant || "ghost") + ' btn-sm" data-action-id="' + esc(a.id) + '"' +
-        (a.title ? ' title="' + esc(a.title) + '"' : "") + ">" + (a.icon && ICONS[a.icon] ? icon(a.icon) : "") + esc(a.label) + "</button>")
+      .map((a) => {
+        // pressed — для дій-перемикачів (наприклад, «тема в повторенні»): кнопка отримує aria-pressed.
+        const pressed = typeof a.pressed === "function" ? a.pressed(ctx) : undefined;
+        const label = typeof a.label === "function" ? a.label(ctx) : a.label;
+        return '<button type="button" class="btn btn-' + (a.variant || "ghost") + ' btn-sm" data-action-id="' + esc(a.id) + '"' +
+          (pressed !== undefined ? ' aria-pressed="' + Boolean(pressed) + '"' : "") +
+          (a.title ? ' title="' + esc(a.title) + '"' : "") + ">" + (a.icon && ICONS[a.icon] ? icon(a.icon) : "") + esc(label) + "</button>";
+      })
       .join("");
   }
 
@@ -299,9 +305,10 @@
   }).observe(document.documentElement, { childList: true, subtree: true });
 
   window.GameUI = {
-    // slot: "review" | "hint" | "backup" | "continue"; дія: { id, label, onClick(ctx, button), icon?, title?, variant?, isVisible?(ctx) }
+    // slot: "review" | "hint" | "backup" | "continue"
+    // дія: { id, label (рядок або ctx => рядок), onClick(ctx, button), icon?, title?, variant?, isVisible?(ctx), pressed?(ctx) }
     addAction(slot, action) {
-      if (!action || !action.id || typeof action.onClick !== "function") throw new TypeError("GameUI.addAction: потрібні id, label і onClick");
+      if (!action || !action.id || !action.label || typeof action.onClick !== "function") throw new TypeError("GameUI.addAction: потрібні id, label і onClick");
       actions[slot] = (actions[slot] || []).filter((a) => a.id !== action.id).concat(action);
       document.querySelectorAll('[data-action-slot="' + slot + '"]').forEach(fillSlot);
     },

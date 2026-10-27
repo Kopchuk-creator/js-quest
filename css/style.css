@@ -664,6 +664,7 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .m-tools { display: flex; flex-wrap: wrap; gap: var(--s2); margin-left: auto; }
 .action-slot { display: contents; }
 .action-slot:empty { display: none; }
+.action-slot [aria-pressed="true"] { border-color: var(--mint-border); color: var(--mint); background: var(--mint-soft); }
 .task-chip { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--border-strong); color: var(--text-muted); }
 
 .m-task { padding: var(--s5); display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
