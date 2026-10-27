@@ -181,3 +181,28 @@ window.HUB_ART = {
 /* Намальовані трофеї локацій: { icon: "assets/trophies/<icon>.webp" }.
    Іконку, якої тут ще немає, показує піксельний спрайт (Art.mountTrophy). */
 window.TROPHY_ART = {};
+[
+  "anchor",
+  "axe",
+  "balloon",
+  "bell",
+  "blueprint",
+  "bolt",
+  "book",
+  "brush",
+  "crown",
+  "flower",
+  "gem",
+  "hammer",
+  "hourglass",
+  "key",
+  "lens",
+  "palette",
+  "pickaxe",
+  "rune",
+  "scroll",
+  "shield",
+  "sign",
+  "star",
+  "sword",
+].forEach((icon) => { window.TROPHY_ART[icon] = "assets/trophies/" + icon + ".webp"; });
