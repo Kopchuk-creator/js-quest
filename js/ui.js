@@ -253,5 +253,67 @@
     setTimeout(() => el.remove(), 4700);
   }
 
-  window.UI = { icon, esc, md, highlight, guessLang, renderSidebar, refreshSidebarHero, setActiveNav, toast, warnStorage };
+  /* ---------- місця для дій, які підключають окремі модулі ----------
+     Сторінки розставляють порожні «гнізда» (UI.actionSlot) там, де дія має з'явитися.
+     Модуль реєструє дію через GameUI.addAction — і кнопка з'являється в усіх гніздах
+     цього типу, зокрема після перемальовування сторінки. Порожнє гніздо невидиме.
+     Опис гнізд і контексту — у docs/integration.md. */
+  const actions = {}; // { [slot]: [{ id, label, icon, title, variant, onClick, isVisible }] }
+
+  function actionSlot(name, context) {
+    const data = Object.keys(context || {}).map((k) => " data-" + k + '="' + esc(context[k]) + '"').join("");
+    return '<span class="action-slot" data-action-slot="' + name + '"' + data + "></span>";
+  }
+
+  function fillSlot(el) {
+    const ctx = Object.assign({}, el.dataset);
+    delete ctx.actionSlot;
+    el.innerHTML = (actions[el.dataset.actionSlot] || [])
+      .filter((a) => !a.isVisible || a.isVisible(ctx))
+      .map((a) => '<button type="button" class="btn btn-' + (a.variant || "ghost") + ' btn-sm" data-action-id="' + esc(a.id) + '"' +
+        (a.title ? ' title="' + esc(a.title) + '"' : "") + ">" + (a.icon && ICONS[a.icon] ? icon(a.icon) : "") + esc(a.label) + "</button>")
+      .join("");
+  }
+
+  function mountActionSlots(root) {
+    (root || document).querySelectorAll("[data-action-slot]").forEach(fillSlot);
+  }
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action-slot] [data-action-id]");
+    if (!btn) return;
+    const slotEl = btn.closest("[data-action-slot]");
+    const action = (actions[slotEl.dataset.actionSlot] || []).find((a) => a.id === btn.dataset.actionId);
+    const ctx = Object.assign({}, slotEl.dataset);
+    delete ctx.actionSlot;
+    if (action) action.onClick(ctx, btn);
+  });
+
+  // Гнізда, вставлені пізніше (перемальовування екранів), заповнюються самі.
+  new MutationObserver((records) => {
+    records.forEach((r) => r.addedNodes.forEach((node) => {
+      if (node.nodeType !== 1) return;
+      if (node.matches("[data-action-slot]")) fillSlot(node);
+      else if (node.querySelector("[data-action-slot]")) mountActionSlots(node);
+    }));
+  }).observe(document.documentElement, { childList: true, subtree: true });
+
+  window.GameUI = {
+    // slot: "review" | "hint" | "backup" | "continue"; дія: { id, label, onClick(ctx, button), icon?, title?, variant?, isVisible?(ctx) }
+    addAction(slot, action) {
+      if (!action || !action.id || typeof action.onClick !== "function") throw new TypeError("GameUI.addAction: потрібні id, label і onClick");
+      actions[slot] = (actions[slot] || []).filter((a) => a.id !== action.id).concat(action);
+      document.querySelectorAll('[data-action-slot="' + slot + '"]').forEach(fillSlot);
+    },
+    removeAction(slot, id) {
+      actions[slot] = (actions[slot] || []).filter((a) => a.id !== id);
+      document.querySelectorAll('[data-action-slot="' + slot + '"]').forEach(fillSlot);
+    },
+    // Перемалювати гнізда, наприклад коли змінився стан (тема вже позначена для повторення).
+    refresh(slot) {
+      document.querySelectorAll(slot ? '[data-action-slot="' + slot + '"]' : "[data-action-slot]").forEach(fillSlot);
+    },
+  };
+
+  window.UI = { icon, esc, md, highlight, guessLang, renderSidebar, refreshSidebarHero, setActiveNav, toast, warnStorage, actionSlot, mountActionSlots };
 })();

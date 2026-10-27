@@ -139,7 +139,9 @@
         '<a class="next-step" href="index.html?world=' + w.id + "#loc-" + nextLoc.id + '">' +
         (thumb ? '<img src="' + thumb.src + '" alt="" loading="lazy">' : '<span class="next-step-ph">' + UI.icon("compass") + "</span>") +
         "<span>" + UI.esc(nextLoc.name) + "</span>" + UI.icon("chevronRight") + "</a>" +
-        '<a class="btn btn-primary btn-block" href="' + api.levelUrl(nextId) + '">' + (c.done ? "Продовжити пригоду" : "Почати пригоду") + UI.icon("arrowRight") + "</a>";
+        '<a class="btn btn-primary btn-block" data-action="continue" data-world="' + w.id + '" data-level="' + nextId + '" href="' + api.levelUrl(nextId) + '">' +
+        (c.done ? "Продовжити пригоду" : "Почати пригоду") + UI.icon("arrowRight") + "</a>" +
+        UI.actionSlot("continue", { world: w.id, level: nextId, place: "hub" });
     } else {
       html += '<p class="wp-note is-done">' + UI.icon("check") + "<span>Світ повністю відновлено — можна повертатися до будь-якої місії.</span></p>" +
         '<a class="btn btn-primary btn-block" href="index.html?world=' + w.id + '#map">До карти світу' + UI.icon("arrowRight") + "</a>";
@@ -388,7 +390,8 @@
       '<div><dt class="visually-hidden">Нагорода</dt><dd class="xp-reward">' + UI.icon("star") + "+" + Game.xpFor(level) + " XP</dd></div>" +
       '<div><dt class="visually-hidden">Тип</dt><dd class="task-type">' + Game.TASK_LABELS[level.taskType] + "</dd></div>" +
       "</dl>" +
-      '<a class="btn btn-primary btn-lg" href="' + levelUrl(currentId) + '">' + UI.icon("play") + "Почати місію</a>";
+      '<a class="btn btn-primary btn-lg" data-action="continue" data-world="' + Game.WORLD_ID + '" data-level="' + currentId + '" href="' + levelUrl(currentId) + '">' + UI.icon("play") + "Почати місію</a>" +
+      UI.actionSlot("continue", { world: Game.WORLD_ID, level: currentId, place: "map" });
     cardScene(loc, currentId, index / loc.levels.length);
   }
 
@@ -586,6 +589,28 @@
      Профіль героя (усі світи)
      ========================================================= */
 
+  // Картка трофея: назва, за що (світова подія), локація й навички її місій;
+  // для закритого — умова отримання й поточний поступ. Усе — з даних світу.
+  function trophyCard(api, p, loc) {
+    const has = api.locationStatus(p, loc) === "done";
+    const lp = api.locationProgress(p, loc);
+    const skills = Array.from(new Set(loc.levels.map((id) => api.getLevel(id).arc).filter(Boolean)));
+    const facts =
+      '<dl class="trophy-facts">' +
+      "<div><dt>Локація</dt><dd>" + UI.esc(loc.name) + "</dd></div>" +
+      (skills.length ? "<div><dt>" + (skills.length > 1 ? "Навички" : "Навичка") + "</dt><dd>" + UI.esc(skills.join(", ")) + "</dd></div>" : "") +
+      "</dl>";
+    const body = has
+      ? '<p class="trophy-why">' + UI.icon("check") + "<span><strong>За що:</strong> " + UI.esc(loc.event) + ".</span></p>"
+      : '<p class="trophy-why">' + UI.icon("lock") + "<span><strong>Як отримати:</strong> пройди всі " + lp.total + " " + plural(lp.total, "місію", "місії", "місій") +
+        " локації «" + UI.esc(loc.name) + "».</span></p>" +
+        '<div class="trophy-progress"><div class="xp-bar is-mint" role="progressbar" aria-label="Поступ до трофея «' + UI.esc(loc.trophy.name) + '»" aria-valuemin="0" aria-valuemax="' + lp.total +
+        '" aria-valuenow="' + lp.done + '"><span style="width:' + Math.round((lp.done / lp.total) * 100) + '%"></span></div><span>' + lp.done + " з " + lp.total + "</span></div>";
+    return '<li class="card trophy' + (has ? " is-owned" : "") + '"><div class="trophy-art" data-item="' + loc.trophy.icon + '"></div>' +
+      '<div class="trophy-info"><h3>' + UI.esc(loc.trophy.name) + ' <span class="trophy-badge">' + (has ? "Отримано" : "Закрито") + "</span></h3>" +
+      facts + body + "</div></li>";
+  }
+
   function renderProfile() {
     const totalXp = Game.totalXpAll();
     const hero = Game.heroLevel(totalXp);
@@ -618,13 +643,11 @@
         const p = api.load();
         return '<h2 class="section-title">Трофеї: ' + UI.esc(api.meta.name) + ' <small class="section-sub">' + p.completed.length + " / " + api.LEVELS.length + " місій</small></h2>" +
           '<ul class="trophy-grid">' +
-          api.LOCATIONS.map((loc) => {
-            const has = api.locationStatus(p, loc) === "done";
-            return '<li class="card trophy' + (has ? " is-owned" : "") + '"><div class="trophy-art" data-item="' + loc.trophy.icon + '"></div>' +
-              "<div><h3>" + (has ? UI.esc(loc.trophy.name) : "???") + "</h3><p>" + UI.esc(loc.name) + "</p>" +
-              '<p class="trophy-event">' + (has ? UI.icon("check") + UI.esc(loc.event) : "Відкриється після проходження локації") + "</p></div></li>";
-          }).join("") + "</ul>";
+          api.LOCATIONS.map((loc) => trophyCard(api, p, loc)).join("") + "</ul>";
       }).join("") +
+      // Резервні копії прогресу: розділ з'являється, щойно модуль збереження додасть дії в гніздо.
+      '<section class="card save-panel" aria-labelledby="save-title"><div><h2 id="save-title">Збереження прогресу</h2>' +
+      "<p>Резервна копія прогресу, досвіду й рішень усіх світів.</p></div>" + UI.actionSlot("backup", { place: "profile" }) + "</section>" +
       '<div class="danger-zone"><button type="button" class="btn btn-ghost" id="reset-progress">' + UI.icon("reset") + "Почати пригоду спочатку</button></div>";
     Art.mount($("#profile-avatar"), Art.hero(), "Аватар героя");
     document.querySelectorAll(".trophy-art").forEach((el) => {

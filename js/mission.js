@@ -197,7 +197,8 @@
       understandingHtml() +
       '<details class="disclosure" id="theory"><summary>' + UI.icon("book") + "Сувій знань" + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><p>' + UI.md(level.concept) + "</p>" +
       (level.example ? '<pre class="code-block">' + UI.highlight(level.example, level.exampleLang || UI.guessLang(level.example, lang)) + "</pre>" : "") + "</div></details>" +
-      '<details class="disclosure" id="hint"><summary>' + UI.icon("bulb") + "Підказка" + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><p>' + UI.md(level.hint) + '</p><div id="solution-slot"></div></div></details>'
+      '<details class="disclosure" id="hint"><summary>' + UI.icon("bulb") + "Підказка" + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><p>' + UI.md(level.hint) + "</p>" +
+      UI.actionSlot("hint", { world: Game.WORLD_ID, level: levelId }) + '<div id="solution-slot"></div></div></details>'
     );
   }
 
@@ -207,8 +208,11 @@
     const u = level.understanding;
     if (!u) return "";
     const v = u.variation;
-    const status = (key, label, value) =>
-      '<li data-u="' + key + '"><span class="u-mark" aria-hidden="true">' + UI.icon("check") + "</span>" + label + ": <strong>" + value + "</strong></li>";
+    // Кожен статус: що перевіряється (одним рядком) і стан. Пояснення гра не оцінює — його стан не змінюється.
+    const status = (key, ic, label, meaning, value) =>
+      '<li class="u-item" data-u="' + key + '"><span class="u-ic" aria-hidden="true">' + UI.icon(ic) + "</span>" +
+      '<span class="u-text"><span class="u-label">' + label + '</span><span class="u-meaning">' + meaning + "</span></span>" +
+      '<span class="u-state">' + value + "</span></li>";
     const answer = v.type === "predict"
       ? codeViewHtml(v.code) + v.expectedAnswer.map((_, i) =>
         '<div class="answer-line" data-vline="' + i + '"><label for="vout-' + i + '">Рядок ' + (i + 1) + '</label><input class="text-input" id="vout-' + i +
@@ -218,9 +222,9 @@
       '<section class="understand" id="understand" aria-labelledby="understand-title">' +
       '<h3 id="understand-title">Перевірка розуміння</h3>' +
       '<ul class="u-status">' +
-      status("tests", "Автотести місії", "ще ні") +
-      status("variation", "Зміна умови", "ще ні") +
-      status("mentor", "Пояснення", "перевіряє ментор") +
+      status("tests", "terminal", "Автотести місії", "Код проходить перевірки гри", "Ще ні") +
+      status("variation", "flag", "Зміна умови", "Код працює і з новою умовою", "Закрито") +
+      status("mentor", "bulb", "Пояснення з ментором", "Своїми словами; гра не оцінює", "З ментором") +
       "</ul>" +
       '<div class="u-block"><h4>Запитання <span class="u-tag">перевіряє ментор</span></h4><p>' + UI.md(u.question) + "</p>" +
       '<p class="u-note">Автоматично не оцінюється: поясни відповідь наставнику своїми словами.</p></div>' +
@@ -238,13 +242,14 @@
     const progress = GameStore.load();
     const testsDone = state.solved || progress.completed.includes(levelId);
     const variationDone = progress.variations.includes(levelId);
-    const set = (key, done, text) => {
+    const set = (key, state, text) => {
       const item = box.querySelector('[data-u="' + key + '"]');
-      item.classList.toggle("is-pass", done);
-      item.querySelector("strong").textContent = text;
+      item.classList.remove("is-pass", "is-open", "is-locked");
+      if (state) item.classList.add("is-" + state);
+      item.querySelector(".u-state").textContent = text;
     };
-    set("tests", testsDone, testsDone ? "пройдено" : "ще ні");
-    set("variation", variationDone, variationDone ? "виконано" : "ще ні");
+    set("tests", testsDone ? "pass" : null, testsDone ? "Пройдено" : "Ще ні");
+    set("variation", variationDone ? "pass" : testsDone ? "open" : "locked", variationDone ? "Виконано" : testsDone ? "Можна виконати" : "Закрито");
     $("#u-run").disabled = !testsDone;
     $("#u-locked").hidden = testsDone;
   }
@@ -305,6 +310,112 @@
     syncUnderstanding();
   }
 
+  /* ---------- режим зосередження й розділи на телефоні ----------
+     Обидва лише ховають частини сторінки класами/атрибутами — DOM не перебудовується,
+     тож код, курсор, консоль і результат лишаються на місці. */
+
+  const FOCUS_KEY = "js-game-focus"; // налаштування вигляду, не прогрес
+  const phone = window.matchMedia("(max-width: 760px)");
+
+  function paneTab(pane, label) {
+    const controls = pane === "result" ? "pane-result console" : "pane-" + pane;
+    return '<button type="button" class="m-switch-tab" role="tab" id="tab-' + pane + '" data-pane-tab="' + pane + '" aria-controls="' + controls +
+      '" aria-selected="false" tabindex="-1"><span>' + label + '</span><span class="m-switch-mark" aria-hidden="true"></span></button>';
+  }
+
+  function setFocusMode(on, save) {
+    const root = $(".mission");
+    root.classList.toggle("is-focus", on);
+    const btn = $("#focus-toggle");
+    btn.setAttribute("aria-pressed", String(on));
+    btn.querySelector(".focus-label").textContent = on ? "Показати сцену" : "Зосередитись";
+    if (save) {
+      try { localStorage.setItem(FOCUS_KEY, on ? "on" : "off"); } catch (e) { /* без сховища — лише на цій сторінці */ }
+    }
+  }
+
+  // Позиція редагування переживає приховування редактора (display: none скидає прокрутку).
+  let editorSpot = null;
+  function rememberEditor() {
+    if (!textarea) return;
+    const box = $("#editor");
+    editorSpot = { start: textarea.selectionStart, end: textarea.selectionEnd, top: box.scrollTop, left: box.scrollLeft, focused: document.activeElement === textarea };
+  }
+  function restoreEditor() {
+    if (!textarea || !editorSpot) return;
+    const box = $("#editor");
+    box.scrollTop = editorSpot.top;
+    box.scrollLeft = editorSpot.left;
+    if (editorSpot.focused) {
+      textarea.focus({ preventScroll: true });
+      textarea.setSelectionRange(editorSpot.start, editorSpot.end);
+    }
+  }
+
+  function showPane(pane, moveFocus) {
+    const root = $(".mission");
+    if (root.dataset.pane === "code" && pane !== "code") rememberEditor();
+    root.dataset.pane = pane;
+    document.querySelectorAll("[data-pane-tab]").forEach((tab) => {
+      const on = tab.dataset.paneTab === pane;
+      tab.setAttribute("aria-selected", String(on));
+      tab.tabIndex = on ? 0 : -1;
+      if (on && moveFocus) tab.focus();
+    });
+    // Новий розділ — з початку, а не з тієї глибини, де гравець був у попередньому.
+    const bar = $(".m-switch");
+    const top = bar.getBoundingClientRect().top + window.scrollY;
+    if (bar.offsetParent && window.scrollY > top) window.scrollTo(0, top);
+    if (pane === "code") restoreEditor();
+  }
+
+  // Позначка на вкладці «Результат»: що показала остання перевірка.
+  function markResultTab(kind) {
+    const mark = document.querySelector('[data-pane-tab="result"] .m-switch-mark');
+    if (!mark) return;
+    mark.className = "m-switch-mark" + (kind ? " is-" + kind : "");
+    mark.textContent = kind === "success" ? "✓" : kind === "error" ? "!" : "";
+    mark.parentElement.setAttribute("aria-label", "Результат" + (kind === "success" ? ": усе пройдено" : kind === "error" ? ": є помилки" : ""));
+  }
+
+  function setupLayoutControls() {
+    let saved = null;
+    try { saved = localStorage.getItem(FOCUS_KEY); } catch (e) { /* ignore */ }
+    setFocusMode(saved === "on", false);
+    $("#focus-toggle").addEventListener("click", () => setFocusMode(!$(".mission").classList.contains("is-focus"), true));
+
+    showPane("task", false);
+    const tabs = $(".m-switch");
+    tabs.addEventListener("click", (e) => {
+      const tab = e.target.closest("[data-pane-tab]");
+      if (tab) showPane(tab.dataset.paneTab, false);
+    });
+    // Стрілки, Home і End — як у звичайних вкладках.
+    tabs.addEventListener("keydown", (e) => {
+      const list = Array.from(tabs.querySelectorAll("[data-pane-tab]"));
+      const i = list.indexOf(document.activeElement);
+      if (i < 0) return;
+      const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: list.length - 1 }[e.key];
+      if (next === undefined) return;
+      e.preventDefault();
+      showPane(list[(next + list.length) % list.length].dataset.paneTab, true);
+    });
+
+    // На телефоні відкрита клавіатура не має перекривати кнопку «Запустити»:
+    // нижнє меню ховаємо, поки гравець друкує, а панель дій липне до низу видимої області.
+    const typing = (on) => document.body.classList.toggle("is-typing", on && phone.matches);
+    main.addEventListener("focusin", (e) => typing(e.target.matches("textarea, input")));
+    main.addEventListener("focusout", () => setTimeout(() => typing(document.activeElement && document.activeElement.matches("textarea, input") && main.contains(document.activeElement)), 0));
+    if (window.visualViewport) {
+      const fit = () => {
+        const hidden = Math.max(0, window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop);
+        document.documentElement.style.setProperty("--keyboard-inset", hidden + "px");
+      };
+      window.visualViewport.addEventListener("resize", fit);
+      window.visualViewport.addEventListener("scroll", fit);
+    }
+  }
+
   function render() {
     main.innerHTML =
       '<div class="mission">' +
@@ -315,18 +426,26 @@
       "<h1>" + UI.esc(level.title) + "</h1>" +
       '<div class="m-progress"><span>Місія ' + (indexInLoc + 1) + " з " + loc.levels.length + "</span>" + dotsHtml() +
       '<span class="task-chip">' + Game.TASK_LABELS[level.taskType] + "</span>" +
-      '<button type="button" class="btn btn-ghost btn-sm" id="open-handbook" aria-haspopup="dialog">' + UI.icon("book") + "Довідник</button></div>" +
+      '<div class="m-tools">' +
+      UI.actionSlot("review", { world: Game.WORLD_ID, level: levelId }) +
+      '<button type="button" class="btn btn-ghost btn-sm" id="focus-toggle" aria-pressed="false" title="Сховати сцену й ілюстрації, лишити завдання, код і результат">' +
+      UI.icon("eye") + '<span class="focus-label">Зосередитись</span></button>' +
+      '<button type="button" class="btn btn-ghost btn-sm" id="open-handbook" aria-haspopup="dialog">' + UI.icon("book") + "Довідник</button></div></div>" +
       "</header>" +
-      '<section class="card m-task" aria-label="Завдання">' + leftHtml() + "</section>" +
-      '<section class="card m-editor" aria-label="Робоча зона">' + centerHtml() + "</section>" +
-      '<div class="m-side">' +
+      // На телефоні розділи місії перемикаються вкладками, щоб редактор мав увесь екран.
+      '<div class="m-switch" role="tablist" aria-label="Розділи місії">' +
+      paneTab("task", "Завдання") + paneTab("code", usesEditor ? "Код" : "Відповідь") + paneTab("result", "Результат") +
+      "</div>" +
+      '<section class="card m-task" id="pane-task" data-pane="task" role="tabpanel" aria-label="Завдання">' + leftHtml() + "</section>" +
+      '<section class="card m-editor" id="pane-code" data-pane="code" role="tabpanel" aria-label="Робоча зона">' + centerHtml() + "</section>" +
+      '<div class="m-side" id="pane-result" data-pane="result" role="tabpanel" aria-label="Результат">' +
       '<section class="m-scene" aria-label="Сцена локації">' +
       sceneHtml() +
       '<span class="xp-chip" id="xp-chip"><span class="xp-badge">XP</span>+' + Game.xpFor(level) + " XP</span>" +
       "</section>" +
       '<section class="result" id="result" aria-live="polite"></section>' +
       "</div>" +
-      '<section class="card m-console" id="console" aria-label="Консоль">' +
+      '<section class="card m-console" id="console" data-pane="result" aria-label="Консоль">' +
       '<button type="button" class="console-head" id="console-toggle" aria-expanded="true" aria-controls="console-body">' + UI.icon("terminal") + "Консоль" + UI.icon("chevronUp", "chev") + "</button>" +
       '<div class="console-body" id="console-body"><p class="console-empty">Тут з\'являться результати перевірки.</p></div>' +
       "</section>" +
@@ -602,12 +721,13 @@
     }
     const box = $("#result");
     box.className = "result" + (kind === "success" ? " is-success" : kind === "error" ? " is-error" : "");
+    markResultTab(kind === "idle" ? null : kind);
     const iconName = kind === "success" ? "check" : kind === "error" ? "close" : "compass";
     box.innerHTML =
       '<span class="result-icon">' + UI.icon(iconName) + "</span>" +
       "<div><h2>" + UI.esc(title || "Світ чекає на тебе") + "</h2><p>" + UI.md(text || "Виконай завдання й натисни «" + (isCodeTask ? "Запустити" : "Перевірити") + "».") + "</p></div>" +
       (kind === "success"
-        ? '<a class="btn btn-primary" id="next-btn" href="' + nextHref() + '">' + (levelId < Game.LEVELS.length ? "Наступна місія" : "До порталів") + UI.icon("chevronRight") + "</a>"
+        ? '<a class="btn btn-primary" id="next-btn" data-action="continue" href="' + nextHref() + '">' + (levelId < Game.LEVELS.length ? "Наступна місія" : "До порталів") + UI.icon("chevronRight") + "</a>"
         : "");
   }
 
@@ -632,6 +752,8 @@
       state.running = false;
       btn.disabled = false;
     }
+    // На телефоні після перевірки одразу показуємо результат (вкладка «Код» лишається з тим самим курсором).
+    if (phone.matches) showPane("result", false);
   }
 
   function reportLines(report) {
@@ -836,6 +958,7 @@
 
   render();
   if (usesEditor) setupEditor();
+  setupLayoutControls();
   drawScene();
   if (sceneArt) {
     Scene.watch($("#scene-art"), sceneArt, () => (document.querySelector(".scene-disk.is-next") ? indexInLoc + 1 : indexInLoc));
