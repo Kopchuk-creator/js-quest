@@ -26,6 +26,10 @@
   <p id="summary">Перевіряю…</p>
   <table><thead><tr><th>#</th><th>Рівень</th><th>Мутантів</th><th>Вижили</th></tr></thead><tbody id="rows"></tbody></table>
   <script>
+    // Частина мутантів навмисно прибирає await/catch. Їхні відхилені проміси —
+    // очікуваний наслідок зламаного варіанта, а не помилка тестової сторінки.
+    window.addEventListener("unhandledrejection", (event) => event.preventDefault());
+
     // Позиції всередині рядків і коментарів не мутуємо (там текст, а не код).
     const TOKEN = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)/g;
     const mask = (code) => code.replace(TOKEN, (m) => m.replace(/[^\n]/g, " "));
