@@ -517,6 +517,11 @@
     cancelAnimationFrame(locFxTimer);
     const canvas = $("#loc-fx");
     const ctx = canvas.getContext("2d");
+    // «Зменшити рух» у системі: світлячки не літають (ілюстрація лишається як є).
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
     const motes = Array.from({ length: 34 }, (_, i) => ({ x: Math.random(), y: Math.random(), s: 0.6 + Math.random() * 1.4, v: 0.008 + Math.random() * 0.02, p: Math.random() * 6.28, i }));
     let last = performance.now();
     function frame(now) {

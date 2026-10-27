@@ -16,7 +16,7 @@
 
   --text: #f3f2ee;
   --text-muted: #a8aab0;
-  --text-dim: #74777e;
+  --text-dim: #8f9299; /* ≥ 4.5:1 на всіх поверхнях — для дрібного другорядного тексту */
 
   --yellow: #f7d23a;
   --yellow-hover: #ffe061;
@@ -207,7 +207,7 @@ code, pre, textarea, kbd, .text-input { font-variant-ligatures: none; font-featu
 .map-stage.is-compact .loc-label.is-locked:not(:hover):not(:focus-visible):not(.is-selected) .loc-name { display: none; }
 .map-stage.is-compact .loc-label.is-done:not(:hover):not(:focus-visible):not(.is-selected) .loc-name { padding: 3px; border-radius: 50%; }
 .map-stage.is-compact .loc-label:hover, .map-stage.is-compact .loc-label:focus-visible, .map-stage.is-compact .loc-label.is-selected { z-index: 2; }
-.map-stage.is-compact .loc-lock { width: 22px; height: 22px; }
+.map-stage.is-compact .loc-lock { width: 24px; height: 24px; } /* мінімальна ціль натискання — 24 px */
 
 /* Намальована карта світу: ілюстрація під підписами локацій. */
 .map-art { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; user-select: none; -webkit-user-drag: none; }
@@ -428,7 +428,7 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
   box-shadow: 0 0.4cqw 1.2cqw rgba(0, 0, 0, 0.45); transition: transform 0.15s var(--ease), border-color 0.15s;
 }
 .portal-label strong { font-size: clamp(11px, 1.55cqw, 17px); font-weight: 800; line-height: 1.15; color: var(--text); }
-.portal-label small { font-size: clamp(9px, 1.2cqw, 13px); color: var(--text-muted); line-height: 1.2; }
+.portal-label small { font-size: clamp(10px, 1.2cqw, 13px); color: var(--text-muted); line-height: 1.2; }
 .portal-spot:hover .portal-label, .portal-spot:focus-visible .portal-label { transform: translateY(-2px); border-color: rgba(247, 210, 58, 0.6); }
 .portal-spot.is-selected .portal-label { border-color: var(--yellow); box-shadow: 0 0 0 0.35cqw rgba(247, 210, 58, 0.2), 0 0 1.6cqw rgba(247, 210, 58, 0.35); }
 .portal-spot.is-selected .portal-label strong { color: var(--yellow); }
@@ -525,7 +525,6 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 }
 .loc-trophy.is-owned .trophy-img { filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 10px rgba(247, 210, 58, 0.55)); }
 @keyframes trophy-float { 50% { transform: translateX(-50%) translateY(-6%); } }
-@media (prefers-reduced-motion: reduce) { .loc-trophy .trophy-img { animation: none; } }
 
 /* Справжні кнопки — точно поверх намальованих на ілюстрації. */
 .loc-zoom {
@@ -647,7 +646,7 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .m-console { grid-area: console; }
 
 .crumbs { display: flex; align-items: center; gap: var(--s2); color: var(--text-muted); font-size: 14px; flex-wrap: wrap; }
-.crumbs a { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+.crumbs a { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; min-height: 24px; }
 .crumbs a:hover { color: var(--text); }
 .crumbs .icon { width: 14px; height: 14px; }
 .crumbs [aria-current] { color: var(--text); }
@@ -787,7 +786,7 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 .tk-fn { color: var(--yellow); }
 .tk-str { color: #8ee6a8; }
 .tk-num { color: #ffb86b; }
-.tk-com { color: #6f7480; font-style: italic; }
+.tk-com { color: #8f9299; font-style: italic; }
 
 .answer-zone { padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3); border-top: 1px solid var(--border); background: var(--surface); }
 .answer-zone h3 { font-size: 14px; font-weight: 700; color: var(--text-muted); }
@@ -1040,6 +1039,8 @@ body:has(.mission.is-focus) .sidebar-hero { display: none; }
   .location-panel, .drawer[open], .toast, .result.is-success, .xp-chip.is-earned { animation: none !important; }
   .scene-pan { transition: none !important; }
   .scene-hero, .scene-disk { animation: none !important; }
+  /* Нескінченні пульсації й підстрибування — теж ні: стан показують колір і підписи. */
+  .loc-node.is-available, .ln-here, .loc-here, .profile-avatar canvas, .map-hero canvas, .loc-trophy .trophy-img { animation: none !important; }
   *, *::before, *::after { transition-duration: 0.01ms !important; }
   .trail.is-next { animation-duration: 3s; }
 }
