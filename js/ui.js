@@ -191,8 +191,8 @@
       { id: "trophies", label: "Трофеї", icon: "trophy", href: root + "index.html#trophies" },
     ];
     container.innerHTML =
-      '<a class="logo" href="' + root + 'index.html#hub" aria-label="Кодомандри — до світів">' +
-      '<img class="logo-image" src="' + root + 'assets/brand/kodomandry-logo.png" width="2172" height="724" alt="Кодомандри" decoding="async"></a>' +
+      '<a class="logo" href="' + root + 'index.html#hub">' +
+      '<span class="logo-wordmark">Кодомандри</span></a>' +
       '<nav class="nav" aria-label="Головне меню"><ul>' +
       items.map((it) =>
         '<li><a class="nav-link' + (it.id === active ? " is-active" : "") + '" data-nav="' + it.id + '" href="' + it.href + '"' +
