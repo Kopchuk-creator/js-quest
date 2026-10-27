@@ -209,26 +209,30 @@
     return function fetch(url) {
       calls.push(String(url));
       const cfg = config || { fail: true };
-      return new Promise((resolve, reject) => {
-        window.setTimeout(() => {
-          if (cfg.fail) {
-            reject(new TypeError("Failed to fetch"));
-            return;
-          }
-          const ok = cfg.ok !== false;
-          const status = cfg.status || (ok ? 200 : 500);
-          resolve({
-            ok,
-            status,
-            statusText: ok ? "OK" : "Error",
-            url: String(url),
-            headers: { get: () => "application/json" },
-            // badJson — сервер відповів, але тіло не є коректним JSON.
-            json: () => (cfg.badJson ? Promise.reject(new SyntaxError("Unexpected token '<', \"<!doctype \"... is not valid JSON")) : Promise.resolve(clone(cfg.data))),
-            text: () => Promise.resolve(JSON.stringify(cfg.data)),
-          });
-        }, 10);
+      const ok = cfg.ok !== false;
+      const status = cfg.status || (ok ? 200 : 500);
+      const response = cfg.fail ? Promise.reject(new TypeError("Failed to fetch")) : Promise.resolve({
+        ok,
+        status,
+        statusText: ok ? "OK" : "Error",
+        url: String(url),
+        headers: { get: () => "application/json" },
+        // badJson — сервер відповів, але тіло не є коректним JSON.
+        json: () => {
+          const body = cfg.badJson
+            ? Promise.reject(new SyntaxError("Unexpected token '<', \"<!doctype \"... is not valid JSON"))
+            : Promise.resolve(clone(cfg.data));
+          // Мутанти можуть прибирати await; лишаємо відхилення видимим їхньому коду,
+          // але не створюємо необроблену помилку на сторінці автоперевірки.
+          body.catch(() => {});
+          return body;
+        },
+        text: () => Promise.resolve(JSON.stringify(cfg.data)),
       });
+      // Збої fetch у тестах навмисні. Позначаємо відхилення як оброблене на рівні
+      // макета, не змінюючи його: await/catch у перевірюваному коді все ще отримає TypeError.
+      response.catch(() => {});
+      return response;
     };
   }
 
@@ -488,8 +492,9 @@
       if (i === 0) report.logs = sandbox.logs.slice();
       report.results.push(result);
     }
-    // Даємо мікрозадачам завершитися, щоб зловити відхилення з останнього тесту.
-    await new Promise((r) => window.setTimeout(r, 0));
+    // Даємо завершитися мікрозадачам підробленого fetch, зокрема відхиленням мутантів,
+    // які навмисно не очікують проміс. Так вони потрапляють у звіт рівня, а не консоль сторінки.
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
     window.removeEventListener("unhandledrejection", onRejection);
     rejections.slice(0, 3).forEach((reason) => {
       report.logs.push("✖ Необроблена помилка проміса: " + (reason && reason.message ? reason.name + ": " + reason.message : show(reason)));

@@ -3944,7 +3944,7 @@ function getPendingTitles() {
 }`,
     testCases: [
       { name: "Назви невиконаних", async check(ctx) { const v = await ctx.fn(); return { pass: ctx.equal(v, ["Масиви", "Події"]), actual: ctx.show(v), expected: "[\"Масиви\", \"Події\"]" }; } },
-      { name: "Функція повертає проміс", check(ctx) { const p = ctx.fn(); return { pass: p instanceof Promise, actual: p instanceof Promise ? "Promise" : ctx.show(p), expected: "Promise" }; } },
+      { name: "Функція повертає проміс", check(ctx) { const p = ctx.fn(); if (p && typeof p.catch === "function") p.catch(() => {}); return { pass: p instanceof Promise, actual: p instanceof Promise ? "Promise" : ctx.show(p), expected: "Promise" }; } },
     ],
     codeChecks: [{ re: /async\s+function\s+getPendingTitles/, label: "`async function`" }, { re: /await\s+simulateLoad\(\)/, label: "`await simulateLoad()`" }, { re: /\.then\(/, not: true, label: "Без `.then`" }],
     solution: `// Готова імітація завантаження

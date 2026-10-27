@@ -177,12 +177,15 @@
   function renderSidebar(container, active, root) {
     // Карта, практика й проєкти ведуть у поточний (останній відвіданий) світ.
     const progress = Game.load();
-    const current = Game.currentLevelId(progress) || Game.LEVELS.length;
+    const current = Game.resumeLevelId(progress) || Game.LEVELS.length;
+    const practiceHref = Game.resumeLevelId(progress)
+      ? Game.resumeUrl(root, progress)
+      : Game.levelUrl(current, root);
     const worldQuery = "index.html?world=" + Game.WORLD_ID;
     const items = [
       { id: "hub", label: "Світи", icon: "globe", href: root + "index.html#hub" },
       { id: "map", label: "Карта", icon: "map", href: root + worldQuery + "#map" },
-      { id: "practice", label: "Практика", icon: "code", href: Game.levelUrl(current, root) },
+      { id: "practice", label: "Практика", icon: "code", href: practiceHref },
       { id: "projects", label: "Проєкти", icon: "projects", href: root + worldQuery + "#projects" },
       { id: "handbook", label: "Довідник", icon: "book", href: root + worldQuery + "#handbook" },
       { id: "trophies", label: "Трофеї", icon: "trophy", href: root + "index.html#trophies" },
