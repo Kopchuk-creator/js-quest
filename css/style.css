@@ -673,18 +673,18 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
   grid-template-columns: minmax(300px, 0.82fr) minmax(0, 1.35fr);
   grid-template-areas:
     "head head"
-    "task editor"
-    "learning console"
+    "task work"
+    "learning work"
     "scene result";
   grid-template-rows: auto auto auto auto;
   align-items: start;
 }
 .m-head { grid-area: head; display: flex; flex-direction: column; gap: var(--s2); }
 .m-task { grid-area: task; align-self: stretch; }
-.m-editor { grid-area: editor; align-self: stretch; }
+.m-work { grid-area: work; display: flex; flex-direction: column; gap: var(--s4); min-width: 0; align-self: start; }
+.m-editor { align-self: stretch; }
 .m-scene { grid-area: scene; }
 .result { grid-area: result; }
-.m-console { grid-area: console; }
 .m-learning { grid-area: learning; display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
 .learning-disclosure[open] > .learning-body { padding: 0 var(--s3) var(--s3); }
 .learning-disclosure .understand { padding: var(--s3); gap: var(--s2); }
@@ -780,7 +780,7 @@ a.project:hover { border-color: var(--yellow); transform: translateY(-2px); }
 }
 
 .m-editor { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
-.mission > .m-editor > .editor { flex: 0 1 auto; min-height: 250px; max-height: min(42vh, 380px); }
+.mission .m-editor > .editor { flex: 0 1 auto; min-height: 250px; max-height: min(42vh, 380px); }
 .tabs { display: flex; align-items: stretch; gap: 2px; padding: var(--s2) var(--s2) 0; border-bottom: 1px solid var(--border); background: var(--bg-raised); overflow-x: auto; }
 .tab {
   display: inline-flex; align-items: center; gap: var(--s2); padding: 10px var(--s4); border-radius: var(--r-sm) var(--r-sm) 0 0;
@@ -960,7 +960,7 @@ body:has(.mission.is-focus) .sidebar-hero { display: none; }
 @media (min-width: 1241px) {
   .mission.is-focus {
     grid-template-columns: minmax(300px, 0.82fr) minmax(0, 1.35fr);
-    grid-template-areas: "head head" "task editor" "learning console" "scene result";
+    grid-template-areas: "head head" "task work" "learning work" ". result";
     grid-template-rows: auto auto auto auto;
   }
 }
@@ -977,12 +977,12 @@ body:has(.mission.is-focus) .sidebar-hero { display: none; }
     grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
     grid-template-areas:
       "head head"
-      "task editor"
-      "learning console"
+      "task work"
+      "learning work"
       "scene result";
     grid-template-rows: none;
   }
-  .mission.is-focus { grid-template-areas: "head head" "task editor" "learning console" "scene result"; }
+  .mission.is-focus { grid-template-areas: "head head" "task work" "learning work" ". result"; }
 }
 
 @media (max-width: 1100px) {
@@ -1027,7 +1027,8 @@ body:has(.mission.is-focus) .sidebar-hero { display: none; }
 @media (max-width: 760px) {
   /* Стовпчик замість сітки: приховані розділи не лишають порожніх рядків із відступами. */
   .mission { display: flex; flex-direction: column; align-items: stretch; gap: var(--s4); }
-  .mission > .m-editor > .editor { min-height: 52vh; max-height: none; }
+  .mission[data-pane="result"] .m-work { order: 4; }
+  .mission .m-editor > .editor { min-height: 52vh; max-height: none; }
   /* Вкладки «Завдання / Код / Результат»: видно один розділ, редактор отримує весь екран. */
   .m-switch {
     grid-area: switch; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;

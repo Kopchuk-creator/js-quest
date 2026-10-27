@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Перевірка відновлення блоку зміни умови</title>
+  <style>
+    body { max-width: 720px; margin: 32px auto; padding: 0 16px; color: #f3f2ee; background: #111213; font: 16px/1.5 system-ui, sans-serif; }
+    details { margin: 24px 0; padding: 16px; border: 1px solid #555; border-radius: 10px; }
+    button { min-height: 44px; padding: 8px 16px; }
+    #result.pass { color: #5ee0a0; } #result.fail { color: #ff8a76; }
+  </style>
+</head>
+<body>
+  <h1>Перевірка відновлення зміни умови</h1>
+  <p>Перевірка ізольована: вона не завантажує сховище прогресу чи чернеток гри.</p>
+  <button id="task-tab" type="button" hidden>Завдання</button>
+  <details id="understanding-panel">
+    <summary>Перевірка розуміння й зміна умови</summary>
+    <p id="understand">Тут відображається етап зміни умови.</p>
+    <button id="u-run" type="button">Перевірити зміну</button>
+  </details>
+  <p id="result" aria-live="polite">Перевіряю…</p>
+  <script src="../js/ui.js"></script>
+  <script>
+    (function () {
+      const panel = document.getElementById("understanding-panel");
+      const target = document.getElementById("understand");
+      const action = document.getElementById("u-run");
+      const taskTab = document.getElementById("task-tab");
+      const result = document.getElementById("result");
+      let passed = true;
+      const assert = (condition, message) => { if (!condition) throw new Error(message); };
+      try {
+        assert(!panel.open, "fixture має починатися закритим");
+        let preparedBeforeOpen = false;
+        const revealed = UI.revealDisclosure(panel, target, action, () => {
+          preparedBeforeOpen = !panel.open;
+          taskTab.hidden = false;
+        });
+        assert(revealed, "закритий блок має бути розкритий");
+        assert(preparedBeforeOpen && !taskTab.hidden, "вкладка «Завдання» має стати видимою перед розкриттям");
+        assert(panel.open, "після відновлення блок має бути відкритий");
+        assert(document.activeElement === action, "фокус має перейти до кнопки зміни умови");
+        panel.open = false;
+        assert(!panel.open, "ручне закриття після відновлення має працювати");
+        result.textContent = "Успішно: блок відкрито, вкладку підготовлено, фокус відновлено; ручне закриття працює.";
+        result.className = "pass";
+      } catch (error) {
+        result.textContent = "Помилка: " + error.message;
+        result.className = "fail";
+        throw error;
+      }
+    })();
+  </script>
+</body>
+</html>

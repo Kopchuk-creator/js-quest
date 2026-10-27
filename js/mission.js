@@ -1,8 +1,7 @@
 /* =========================================================
    mission.js — Екран 2: проходження місії (?id=N).
-   Ліворуч — легенда, завдання, чеклист, теорія й підказка;
-   по центру — редактор/відповідь, кнопки й консоль;
-   праворуч — сцена, що реагує на результат.
+   Ліворуч — умова й навчальні матеріали; праворуч — редактор зі своєю консоллю;
+   нижче — сцена локації та результат.
    ========================================================= */
 (function () {
   "use strict";
@@ -448,17 +447,18 @@
       paneTab("task", "Завдання") + paneTab("code", usesEditor ? "Код" : "Відповідь") + paneTab("result", "Результат") +
       "</div>" +
       '<section class="card m-task" id="pane-task" data-pane="task" role="tabpanel" aria-label="Завдання">' + leftHtml() + "</section>" +
+      '<div class="m-work">' +
       '<section class="card m-editor" id="pane-code" data-pane="code" role="tabpanel" aria-label="Робоча зона">' + centerHtml() + "</section>" +
+      '<section class="card m-console" id="console" data-pane="result" aria-label="Консоль">' +
+      '<button type="button" class="console-head" id="console-toggle" aria-expanded="true" aria-controls="console-body">' + UI.icon("terminal") + "Консоль" + UI.icon("chevronUp", "chev") + "</button>" +
+      '<div class="console-body" id="console-body"><p class="console-empty">Тут з\'являться результати перевірки.</p></div>' +
+      "</section></div>" +
       '<section class="m-learning" data-pane="task" aria-label="Навчальні матеріали">' + learningHtml() + "</section>" +
       '<section class="m-scene" id="pane-scene" data-pane="result" aria-label="Сцена локації">' +
       sceneHtml() +
       '<span class="xp-chip" id="xp-chip"><span class="xp-badge">XP</span>+' + Game.xpFor(level) + " XP</span>" +
       "</section>" +
       '<section class="result" id="result" data-pane="result" role="tabpanel" aria-label="Результат" aria-live="polite"></section>' +
-      '<section class="card m-console" id="console" data-pane="result" aria-label="Консоль">' +
-      '<button type="button" class="console-head" id="console-toggle" aria-expanded="true" aria-controls="console-body">' + UI.icon("terminal") + "Консоль" + UI.icon("chevronUp", "chev") + "</button>" +
-      '<div class="console-body" id="console-body"><p class="console-empty">Тут з\'являться результати перевірки.</p></div>' +
-      "</section>" +
       "</div>";
     Art.mount($(".mentor-art"), Art.mentor(), "Наставник Дужко");
     setResult("idle");
@@ -1029,8 +1029,9 @@
     syncUnderstanding();
   }
   if (requestedStage && level.understanding) {
-    const understanding = $("#understand");
-    if (understanding) { understanding.scrollIntoView({ block: "center" }); $("#u-run").focus({ preventScroll: true }); }
+    UI.revealDisclosure($("#understanding-panel"), $("#understand"), $("#u-run"), () => {
+      if (phone.matches) showPane("task", false);
+    });
   }
   // Довідник відкривається на поточній локації — щоб швидко підглянути схожі теми.
   $("#open-handbook").addEventListener("click", () => Handbook.openDrawer({ root: "../", world: Game.WORLD_ID, location: loc.id }));

@@ -312,6 +312,15 @@
     return showDialog(Object.assign({ title, message, confirmLabel: "Зрозуміло" }, options || {}));
   }
 
+  function revealDisclosure(panel, target, focusTarget, prepare) {
+    if (!panel || panel.tagName !== "DETAILS") return false;
+    if (typeof prepare === "function") prepare();
+    panel.open = true;
+    if (target && typeof target.scrollIntoView === "function") target.scrollIntoView({ block: "center" });
+    if (focusTarget && typeof focusTarget.focus === "function") focusTarget.focus({ preventScroll: true });
+    return true;
+  }
+
   /* ---------- місця для дій, які підключають окремі модулі ----------
      Сторінки розставляють порожні «гнізда» (UI.actionSlot) там, де дія має з'явитися.
      Модуль реєструє дію через GameUI.addAction — і кнопка з'являється в усіх гніздах
@@ -381,5 +390,5 @@
     },
   };
 
-  window.UI = { icon, esc, md, highlight, guessLang, renderSidebar, refreshSidebarHero, setActiveNav, toast, warnStorage, confirmDialog, messageDialog, actionSlot, mountActionSlots };
+  window.UI = { icon, esc, md, highlight, guessLang, renderSidebar, refreshSidebarHero, setActiveNav, toast, warnStorage, confirmDialog, messageDialog, revealDisclosure, actionSlot, mountActionSlots };
 })();
