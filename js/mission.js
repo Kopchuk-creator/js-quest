@@ -182,10 +182,10 @@
   function leftHtml() {
     const extra = [];
     if (level.html) {
-      extra.push('<details class="disclosure" open><summary>' + UI.icon("code") + "Розмітка сторінки" + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><pre class="code-block">' + UI.esc(level.html) + "</pre></div></details>");
+      extra.push('<details class="disclosure"><summary>' + UI.icon("code") + "Розмітка сторінки" + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><pre class="code-block">' + UI.esc(level.html) + "</pre></div></details>");
     }
     (level.readonlyFiles || []).forEach((f) => {
-      extra.push('<details class="disclosure" open><summary>' + UI.icon("code") + UI.esc(f.name) + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><pre class="code-block">' + UI.highlight(f.code) + "</pre></div></details>");
+      extra.push('<details class="disclosure"><summary>' + UI.icon("code") + UI.esc(f.name) + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><pre class="code-block">' + UI.highlight(f.code) + "</pre></div></details>");
     });
     return (
       '<div class="mentor" id="mentor"><div class="mentor-art"></div><p class="bubble" id="mentor-text" aria-live="polite">' + MENTOR_START[level.taskType] + "</p></div>" +
@@ -196,8 +196,13 @@
       extra.join("") +
       '<ul class="checklist" id="checklist" aria-label="Критерії виконання">' + checklistItems().map((it) =>
         '<li class="check-item" data-key="' + it.key + '"><span class="check-box">' + UI.icon("check") + '</span><span>' + UI.md(it.label) + '</span><span class="visually-hidden check-state">не виконано</span></li>'
-      ).join("") + "</ul>" +
-      understandingHtml() +
+      ).join("") + "</ul>"
+    );
+  }
+
+  function learningHtml() {
+    return (
+      (level.understanding ? '<details class="disclosure learning-disclosure" id="understanding-panel"><summary>' + UI.icon("bulb") + "Перевірка розуміння й зміна умови" + UI.icon("chevronRight", "chev") + '</summary><div class="learning-body">' + understandingHtml() + "</div></details>" : "") +
       '<details class="disclosure" id="theory"><summary>' + UI.icon("book") + "Сувій знань" + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><p>' + UI.md(level.concept) + "</p>" +
       (level.example ? '<pre class="code-block">' + UI.highlight(level.example, level.exampleLang || UI.guessLang(level.example, lang)) + "</pre>" : "") + "</div></details>" +
       '<details class="disclosure" id="hint"><summary>' + UI.icon("bulb") + "Поступова підказка" + UI.icon("chevronRight", "chev") + '</summary><div class="disclosure-body"><div id="hint-stage" aria-live="polite">Спершу запитання, потім ідея з «Сувою знань», далі — короткий приклад.</div>' +
@@ -324,7 +329,7 @@
   const phone = window.matchMedia("(max-width: 760px)");
 
   function paneTab(pane, label) {
-    const controls = pane === "result" ? "pane-result console" : "pane-" + pane;
+    const controls = pane === "result" ? "pane-scene result console" : "pane-" + pane;
     return '<button type="button" class="m-switch-tab" role="tab" id="tab-' + pane + '" data-pane-tab="' + pane + '" aria-controls="' + controls +
       '" aria-selected="false" tabindex="-1"><span>' + label + '</span><span class="m-switch-mark" aria-hidden="true"></span></button>';
   }
@@ -444,13 +449,12 @@
       "</div>" +
       '<section class="card m-task" id="pane-task" data-pane="task" role="tabpanel" aria-label="Завдання">' + leftHtml() + "</section>" +
       '<section class="card m-editor" id="pane-code" data-pane="code" role="tabpanel" aria-label="Робоча зона">' + centerHtml() + "</section>" +
-      '<div class="m-side" id="pane-result" data-pane="result" role="tabpanel" aria-label="Результат">' +
-      '<section class="m-scene" aria-label="Сцена локації">' +
+      '<section class="m-learning" data-pane="task" aria-label="Навчальні матеріали">' + learningHtml() + "</section>" +
+      '<section class="m-scene" id="pane-scene" data-pane="result" aria-label="Сцена локації">' +
       sceneHtml() +
       '<span class="xp-chip" id="xp-chip"><span class="xp-badge">XP</span>+' + Game.xpFor(level) + " XP</span>" +
       "</section>" +
-      '<section class="result" id="result" aria-live="polite"></section>' +
-      "</div>" +
+      '<section class="result" id="result" data-pane="result" role="tabpanel" aria-label="Результат" aria-live="polite"></section>' +
       '<section class="card m-console" id="console" data-pane="result" aria-label="Консоль">' +
       '<button type="button" class="console-head" id="console-toggle" aria-expanded="true" aria-controls="console-body">' + UI.icon("terminal") + "Консоль" + UI.icon("chevronUp", "chev") + "</button>" +
       '<div class="console-body" id="console-body"><p class="console-empty">Тут з\'являться результати перевірки.</p></div>' +

@@ -86,7 +86,8 @@
       const p = art.portals[s.world.id];
       if (!p) return "";
       const [x, y] = p.label;
-      const LABEL_HALF_W = 104, LABEL_HALF_H = 28;
+      // Сусідні портали на артборді розташовані приблизно за 202 px; ширина 176 px лишає проміжок.
+      const LABEL_HALF_W = 88, LABEL_HALF_H = 36;
       const style = "left:" + ((x - LABEL_HALF_W) / W) * 100 + "%;width:" + ((LABEL_HALF_W * 2) / W) * 100 + "%;top:" + (p.top / H) * 100 +
         "%;height:" + ((y + LABEL_HALF_H - p.top) / H) * 100 + "%";
       const selected = s.world.id === selectedWorld;
@@ -633,7 +634,7 @@
 
     $("#profile").innerHTML =
       '<section class="card profile-hero" aria-label="Герой">' +
-      '<div class="profile-avatar" id="profile-avatar"></div>' +
+      '<div class="profile-avatar"><img src="assets/art/hero.webp" alt="Герой Кодомандрів із наплічником" decoding="async"></div>' +
       '<div class="profile-info"><p class="eyebrow">Мандрівник між світами</p><h2>Рівень ' + hero.level + "</h2>" +
       '<div class="xp-head"><span>До рівня ' + (hero.level + 1) + "</span><span>" + hero.current + " / " + hero.needed + " XP</span></div>" +
       '<div class="xp-bar" role="progressbar" aria-label="Досвід до наступного рівня" aria-valuemin="0" aria-valuemax="' + hero.needed + '" aria-valuenow="' + hero.current + '"><span style="width:' + pct + '%"></span></div>' +
@@ -652,7 +653,7 @@
       }).join("") +
       // Резервні копії прогресу: розділ з'являється, щойно модуль збереження додасть дії в гніздо.
       '<section class="card save-panel" aria-labelledby="save-title"><div><h2 id="save-title">Збереження прогресу</h2>' +
-      "<p>Резервна копія прогресу, досвіду й рішень усіх світів.</p></div>" + UI.actionSlot("backup", { place: "profile" }) + "</section>" +
+      "<p>Резервна копія прогресу, досвіду й рішень усіх світів.</p></div><div class=\"save-actions\">" + UI.actionSlot("backup", { place: "profile" }) + "</div></section>" +
       (() => {
         const marked = worlds.flatMap((api) => {
           const p = api.load();
@@ -663,13 +664,12 @@
           : '<p>Позначай місії під час навчання, щоб повернутися до них тут.</p>') + '</section>';
       })() +
       '<div class="danger-zone"><button type="button" class="btn btn-ghost" id="reset-progress">' + UI.icon("reset") + "Почати пригоду спочатку</button></div>";
-    Art.mount($("#profile-avatar"), Art.hero(), "Аватар героя");
     document.querySelectorAll(".trophy-art").forEach((el) => {
       const c = Art.mountTrophy(el, el.dataset.item);
       if (!el.closest(".is-owned")) c.classList.add("is-silhouette");
     });
-    $("#reset-progress").addEventListener("click", () => {
-      if (window.confirm("Скинути прогрес, досвід, чернетки й трофеї в усіх світах? Цю дію не можна скасувати.")) {
+    $("#reset-progress").addEventListener("click", async () => {
+      if (await UI.confirmDialog("Почати пригоду спочатку?", "Скинути прогрес, досвід, чернетки й трофеї в усіх світах? Цю дію не можна скасувати.", { confirmLabel: "Скинути", danger: true })) {
         GameStore.reset(Game.playableWorlds().map((w) => w.id));
         progress = Game.load();
         renderAll();

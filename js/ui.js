@@ -256,6 +256,62 @@
     setTimeout(() => el.remove(), 4700);
   }
 
+  function showDialog({ title, message, confirmLabel, cancelLabel, danger }) {
+    return new Promise((resolve) => {
+      const dialog = document.createElement("dialog");
+      dialog.className = "game-dialog" + (danger ? " is-danger" : "");
+      dialog.setAttribute("aria-labelledby", "game-dialog-title");
+      const heading = document.createElement("h2");
+      heading.id = "game-dialog-title";
+      heading.textContent = title;
+      const body = document.createElement("p");
+      body.className = "game-dialog-message";
+      body.textContent = message;
+      const actions = document.createElement("div");
+      actions.className = "game-dialog-actions";
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+        dialog.close();
+        dialog.remove();
+      };
+      if (cancelLabel) {
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "btn btn-ghost";
+        cancel.textContent = cancelLabel;
+        cancel.addEventListener("click", () => finish(false));
+        actions.appendChild(cancel);
+      }
+      const accept = document.createElement("button");
+      accept.type = "button";
+      accept.className = "btn " + (danger ? "btn-danger" : "btn-primary");
+      accept.textContent = confirmLabel || "Зрозуміло";
+      accept.addEventListener("click", () => finish(true));
+      actions.appendChild(accept);
+      dialog.append(heading, body, actions);
+      dialog.addEventListener("cancel", (event) => { event.preventDefault(); finish(false); });
+      dialog.addEventListener("click", (event) => { if (event.target === dialog) finish(false); });
+      dialog.addEventListener("close", () => {
+        if (!settled) { settled = true; resolve(false); }
+        dialog.remove();
+      }, { once: true });
+      document.body.appendChild(dialog);
+      dialog.showModal();
+      (cancelLabel ? actions.firstElementChild : accept).focus();
+    });
+  }
+
+  function confirmDialog(title, message, options) {
+    return showDialog(Object.assign({ title, message, confirmLabel: "Підтвердити", cancelLabel: "Скасувати" }, options || {}));
+  }
+
+  function messageDialog(title, message, options) {
+    return showDialog(Object.assign({ title, message, confirmLabel: "Зрозуміло" }, options || {}));
+  }
+
   /* ---------- місця для дій, які підключають окремі модулі ----------
      Сторінки розставляють порожні «гнізда» (UI.actionSlot) там, де дія має з'явитися.
      Модуль реєструє дію через GameUI.addAction — і кнопка з'являється в усіх гніздах
@@ -325,5 +381,5 @@
     },
   };
 
-  window.UI = { icon, esc, md, highlight, guessLang, renderSidebar, refreshSidebarHero, setActiveNav, toast, warnStorage, actionSlot, mountActionSlots };
+  window.UI = { icon, esc, md, highlight, guessLang, renderSidebar, refreshSidebarHero, setActiveNav, toast, warnStorage, confirmDialog, messageDialog, actionSlot, mountActionSlots };
 })();

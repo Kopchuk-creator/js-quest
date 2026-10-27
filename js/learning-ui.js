@@ -89,11 +89,11 @@
         return world.name + ": " + world.completed + " місій, " + world.xp + " XP, " + world.variations +
           " змін умов, " + world.drafts + " чернеток, " + world.review + " тем для повторення" + resume;
       }).join("\n");
-      if (!window.confirm("Файл перевірено. Ці дані буде відновлено й замінено для вказаних світів:\n\n" + details + "\n\nПродовжити?")) return;
+      if (!await UI.confirmDialog("Відновлення резервної копії", "Файл перевірено. Ці дані буде відновлено й замінено для вказаних світів:\n\n" + details + "\n\nПродовжити?", { confirmLabel: "Відновити" })) return;
       GameStore.restoreBackup(contents);
       window.dispatchEvent(new Event("kodomantry:progress-restored"));
     } catch (error) {
-      window.alert("Не вдалося відновити резервну копію: " + error.message + "\nДані гри не змінено.");
+      await UI.messageDialog("Не вдалося відновити копію", "Не вдалося відновити резервну копію: " + error.message + "\nДані гри не змінено.");
     } finally {
       input.value = "";
     }
